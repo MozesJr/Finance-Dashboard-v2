@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
+import * as path from 'path';
+import { config } from 'dotenv';
+config({ path: path.resolve(__dirname, '../.env') });
+
 const prisma = new PrismaClient();
 
 interface CategorySeed {
@@ -37,8 +41,11 @@ async function main() {
   console.log('🌱 Starting seed...');
 
   // Create admin user
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@finance.local';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'InitialPassword123!';
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminEmail || !adminPassword) {
+    throw new Error('ADMIN_EMAIL dan ADMIN_PASSWORD wajib diisi di apps/api/.env');
+  }
 
   const passwordHash = await argon2.hash(adminPassword);
 
