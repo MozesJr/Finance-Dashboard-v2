@@ -85,20 +85,35 @@ model User {
   aiInsights    AiInsight[]
   telegramLink  TelegramLink?
   telegramLinkCodes TelegramLinkCode[]
+  auditLogsAsAdmin AuditLog[] @relation("AdminAuditLogs")
 
   @@index([approvedById])
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?  // Track rotation: which token replaced this one
+  createdAt   DateTime @default(now())
 
   @@index([userId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  admin        User     @relation("AdminAuditLogs", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUserId String
+  action       String   // APPROVE | REJECT | SUSPEND | REACTIVATE
+  details      Json?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetUserId])
 }
 
 model Wallet {

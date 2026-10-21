@@ -13,10 +13,15 @@
     "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "strict": true
+    "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "paths": {
+      "@shared/*": ["../../packages/shared/src/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "test"]
