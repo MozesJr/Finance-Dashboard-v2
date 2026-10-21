@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+coverage
+.turbo
+*.log
+*.pid
+.env
+.env.local
+.vscode
+.idea
+.DS_Store

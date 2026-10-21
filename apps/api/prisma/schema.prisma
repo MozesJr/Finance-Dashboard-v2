@@ -1,0 +1,327 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum TxType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum TxStatus {
+  DRAFT
+  CONFIRMED
+}
+
+enum TxSource {
+  WEB
+  TELEGRAM
+  WHATSAPP
+}
+
+enum GoalType {
+  EMERGENCY
+  INVESTMENT
+  CUSTOM
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum ReceiptStatus {
+  PENDING
+  PARSED
+  FAILED
+}
+
+// Models
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(USER)
+  status        UserStatus @default(PENDING)
+  approvedAt    DateTime?
+  approvedById  String?
+  approvedBy    User?    @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvals     User[]   @relation("UserApprovals")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  wallets       Wallet[]
+  categories    Category[]
+  transactions  Transaction[]
+  receipts      Receipt[]
+  savingsGoals  SavingsGoal[]
+  savingsContributions SavingsContribution[]
+  allocationPlans AllocationPlan[]
+  budgets       Budget[]
+  recurringRules RecurringRule[]
+  merchantRules MerchantCategoryRule[]
+  aiInsights    AiInsight[]
+  telegramLink  TelegramLink?
+  telegramLinkCodes TelegramLinkCode[]
+
+  @@index([approvedById])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Wallet {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           String   // CASH | BANK | EWALLET
+  initialBalance BigInt   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions Transaction[] @relation("WalletTransactions")
+  transfersTo  Transaction[] @relation("TransfersTo")
+
+  @@index([userId])
+}
+
+model Category {
+  id       String   @id @default(uuid())
+  userId   String?
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name     String
+  type     CategoryType
+  icon     String?
+  color    String?
+  isSystem Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  transactions Transaction[]
+  budgets      Budget[]
+  recurringRules RecurringRule[]
+  merchantRules  MerchantCategoryRule[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId      String
+  wallet        Wallet   @relation("WalletTransactions", fields: [walletId], references: [id], onDelete: Cascade)
+  toWalletId    String?
+  toWallet      Wallet?  @relation("TransfersTo", fields: [toWalletId], references: [id], onDelete: SetNull)
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  type          TxType
+  amount        BigInt
+  status        TxStatus @default(DRAFT)
+  merchant      String?
+  note          String?
+  date          DateTime @db.Date
+  source        TxSource @default(WEB)
+  receiptId     String?
+  receipt       Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  aiConfidence  Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([categoryId])
+}
+
+model Receipt {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filePath   String
+  ocrText    String?
+  parsedJson Json?
+  status     ReceiptStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model SavingsGoal {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      GoalType
+  target    BigInt
+  current   BigInt   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contributions SavingsContribution[]
+  allocationItems AllocationItem[]
+
+  @@index([userId])
+}
+
+model SavingsContribution {
+  id        String   @id @default(uuid())
+  goalId    String
+  goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    BigInt
+  date      DateTime  @db.Date
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([goalId])
+  @@index([userId])
+}
+
+model AllocationPlan {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlyIncome  BigInt
+  activePhase    Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items AllocationItem[]
+
+  @@index([userId])
+}
+
+model AllocationItem {
+  id            String   @id @default(uuid())
+  planId        String
+  plan          AllocationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  phase         Int
+  name          String
+  percent       Int      // 0-100
+  color         String?
+  linkedGoalId  String?
+  linkedGoal    SavingsGoal? @relation(fields: [linkedGoalId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@unique([planId, phase, name])
+  @@index([planId])
+  @@index([linkedGoalId])
+}
+
+model Budget {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount     BigInt
+  month      DateTime @db.Date
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, categoryId, month])
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model RecurringRule {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  amount      BigInt
+  frequency   String   // DAILY | WEEKLY | MONTHLY | YEARLY
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model MerchantCategoryRule {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantPattern  String
+  categoryId       String
+  category         Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, merchantPattern])
+  @@index([userId])
+  @@index([categoryId])
+}
+
+model AiInsight {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period      String   // YYYY-MM format
+  kind        String
+  content     Json
+  generatedAt DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, period, kind])
+  @@index([userId])
+}
+
+model TelegramLink {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId    String   @unique
+  linkedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+model TelegramLinkCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String   // 6 digit
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
