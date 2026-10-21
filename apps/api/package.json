@@ -10,7 +10,9 @@
     "test:watch": "jest --watch",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "lint": "eslint src",
+    "start": "node dist/main"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
