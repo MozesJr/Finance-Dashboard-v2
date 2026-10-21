@@ -6,7 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",

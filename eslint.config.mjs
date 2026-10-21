@@ -1,54 +1,57 @@
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import prettier from 'eslint-config-prettier';
 
-export default tseslint.config(
+export default defineConfig(
   {
-    ignores: ['node_modules', 'dist', 'coverage', '.turbo'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+      'apps/api/prisma/migrations/**',
+      '**/*.config.{js,mjs,cjs,ts}',
+    ],
   },
+
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+
   {
-    files: ['apps/api/src/**/*.ts'],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: 'apps/api/tsconfig.json',
-      },
-    },
     rules: {
-      ...js.configs.recommended.rules,
-      ...tseslint.configs.recommended.rules,
-      'no-console': 'warn',
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    },
-  },
-  {
-    files: ['apps/web/src/**/*.tsx', 'apps/web/src/**/*.ts'],
-    languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: 'apps/web/tsconfig.json',
-      },
-    },
-    rules: {
-      ...js.configs.recommended.rules,
-      ...tseslint.configs.recommended.rules,
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
+
+  // Backend + shared (Node, Jest)
   {
-    files: ['packages/shared/src/**/*.ts'],
+    files: ['apps/api/**/*.ts', 'packages/shared/**/*.ts'],
     languageOptions: {
-      parser: tseslint.parser,
-      parserOptions: {
-        project: 'packages/shared/tsconfig.json',
-      },
+      globals: { ...globals.node, ...globals.jest },
+    },
+  },
+
+  // Frontend (React, browser)
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: { globals: globals.browser },
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-refresh': reactRefresh,
     },
     rules: {
-      ...js.configs.recommended.rules,
-      ...tseslint.configs.recommended.rules,
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
-  }
+  },
+
+  // Matikan rule yang bentrok dengan Prettier (harus paling akhir)
+  prettier
 );

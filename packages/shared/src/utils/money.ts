@@ -27,12 +27,12 @@ export function parseNominal(input: string): bigint {
         return numStr.replace(/,/g, '').replace(/\./g, '.');
       } else if (afterDot.length === 3) {
         // Dot with 3 digits = thousands separator
-        return numStr.replace(/[\.,]/g, '');
+        return numStr.replace(/[.,]/g, '');
       }
     }
 
     // No clear decimal separator, remove all separators
-    return numStr.replace(/[\.,]/g, '');
+    return numStr.replace(/[.,]/g, '');
   };
 
   // Handle Indonesian shorthand
@@ -58,7 +58,7 @@ export function parseNominal(input: string): bigint {
   }
 
   // Try direct parsing
-  let numStr = normalizeNumber(normalized);
+  const numStr = normalizeNumber(normalized);
   const num = parseFloat(numStr);
   if (isNaN(num)) {
     throw new Error(`Cannot parse nominal: ${input}`);
