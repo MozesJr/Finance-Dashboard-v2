@@ -6,3 +6,5 @@ export * from './category';
 export * from './budget';
 export * from './audit-log';
 export * from './dashboard';
+export * from './savings';
+export * from './allocation';
