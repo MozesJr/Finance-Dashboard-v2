@@ -67,7 +67,7 @@ export class AuthService {
   }
 
   async login(input: LoginInput, res: Response) {
-    const user = await this.usersService.getUserByEmail(input.email);
+    const user = await this.usersService.getUserByEmailWithPassword(input.email);
 
     // Timing attack prevention: always verify password
     const passwordToVerify = user ? input.password : 'invalid-password';

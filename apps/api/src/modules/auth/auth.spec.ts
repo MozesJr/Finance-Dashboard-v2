@@ -40,6 +40,7 @@ describe('AuthService', () => {
   beforeEach(async () => {
     usersService = {
       getUserByEmail: jest.fn(),
+      getUserByEmailWithPassword: jest.fn(),
       getUserById: jest.fn(),
       createUser: jest.fn(),
       updateUser: jest.fn(),
@@ -123,11 +124,37 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow('Email sudah terdaftar');
     });
+
+    it('should not expose passwordHash in register response', async () => {
+      const hashedPassword = '$argon2id$v=19$m=19456,t=2,p=1$abcd$xyz';
+      (argon2.hash as jest.Mock).mockResolvedValue(hashedPassword);
+      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(null);
+      (usersService.createUser as jest.Mock).mockResolvedValue({
+        id: 'new-user-1',
+        email: 'newuser@example.com',
+        status: 'PENDING',
+        role: 'USER',
+      });
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        id: 'new-user-1',
+        email: 'newuser@example.com',
+        status: 'PENDING',
+        role: 'USER',
+      });
+
+      const result = await service.register({
+        email: 'newuser@example.com',
+        password: 'Password123',
+        passwordConfirm: 'Password123',
+      });
+
+      expect(result).not.toHaveProperty('passwordHash');
+    });
   });
 
   describe('login', () => {
     it('should successfully login ACTIVE user and set cookies with httpOnly and proper paths', async () => {
-      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
+      (usersService.getUserByEmailWithPassword as jest.Mock).mockResolvedValue(mockUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
       (jwtService.sign as jest.Mock).mockReturnValue('access-token-value');
       (refreshTokenRepository.create as jest.Mock).mockResolvedValue({
@@ -146,6 +173,7 @@ describe('AuthService', () => {
         email: 'test@example.com',
         role: 'USER',
       });
+      expect(result).not.toHaveProperty('passwordHash');
 
       // Check access_token cookie
       const accessTokenCall = (res.cookie as jest.Mock).mock.calls.find(
@@ -177,7 +205,7 @@ describe('AuthService', () => {
 
 
     it('should reject login for PENDING user with appropriate message', async () => {
-      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockPendingUser);
+      (usersService.getUserByEmailWithPassword as jest.Mock).mockResolvedValue(mockPendingUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
       const res = createMockResponse() as Response;
@@ -188,7 +216,7 @@ describe('AuthService', () => {
     });
 
     it('should reject login for REJECTED user', async () => {
-      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockRejectedUser);
+      (usersService.getUserByEmailWithPassword as jest.Mock).mockResolvedValue(mockRejectedUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
       const res = createMockResponse() as Response;
@@ -199,7 +227,7 @@ describe('AuthService', () => {
     });
 
     it('should reject login for SUSPENDED user', async () => {
-      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockSuspendedUser);
+      (usersService.getUserByEmailWithPassword as jest.Mock).mockResolvedValue(mockSuspendedUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
       const res = createMockResponse() as Response;
@@ -221,7 +249,7 @@ describe('AuthService', () => {
     });
 
     it('should reject login for incorrect password', async () => {
-      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
+      (usersService.getUserByEmailWithPassword as jest.Mock).mockResolvedValue(mockUser);
       (argon2.verify as jest.Mock).mockRejectedValue(new Error('Verification failed'));
 
       const res = createMockResponse() as Response;

@@ -99,6 +99,18 @@ describe('AdminService', () => {
         'Tidak bisa approve akun sendiri',
       );
     });
+
+    it('should not expose passwordHash in approve response', async () => {
+      (usersService.getUserById as jest.Mock).mockResolvedValue(mockPendingUser);
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        ...mockPendingUser,
+        status: 'ACTIVE',
+      });
+
+      const result = await service.approveUser(adminId, userId);
+
+      expect(result).not.toHaveProperty('passwordHash');
+    });
   });
 
   describe('rejectUser', () => {
@@ -131,6 +143,18 @@ describe('AdminService', () => {
         'Tidak bisa reject akun sendiri',
       );
     });
+
+    it('should not expose passwordHash in reject response', async () => {
+      (usersService.getUserById as jest.Mock).mockResolvedValue(mockPendingUser);
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        ...mockPendingUser,
+        status: 'REJECTED',
+      });
+
+      const result = await service.rejectUser(adminId, userId);
+
+      expect(result).not.toHaveProperty('passwordHash');
+    });
   });
 
   describe('suspendUser', () => {
@@ -162,6 +186,18 @@ describe('AdminService', () => {
       await expect(service.suspendUser(adminId, adminId)).rejects.toThrow(
         'Tidak bisa suspend akun sendiri',
       );
+    });
+
+    it('should not expose passwordHash in suspend response', async () => {
+      (usersService.getUserById as jest.Mock).mockResolvedValue(mockActiveUser);
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        ...mockActiveUser,
+        status: 'SUSPENDED',
+      });
+
+      const result = await service.suspendUser(adminId, userId);
+
+      expect(result).not.toHaveProperty('passwordHash');
     });
   });
 
@@ -208,6 +244,18 @@ describe('AdminService', () => {
       await expect(service.reactivateUser(adminId, adminId)).rejects.toThrow(
         'Tidak bisa reactivate akun sendiri',
       );
+    });
+
+    it('should not expose passwordHash in reactivate response', async () => {
+      (usersService.getUserById as jest.Mock).mockResolvedValue(mockSuspendedUser);
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        ...mockSuspendedUser,
+        status: 'ACTIVE',
+      });
+
+      const result = await service.reactivateUser(adminId, userId);
+
+      expect(result).not.toHaveProperty('passwordHash');
     });
   });
 
