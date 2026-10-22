@@ -73,7 +73,109 @@ describe('AuthService', () => {
     service = module.get<AuthService>(AuthService);
   });
 
+  describe('register', () => {
+    it('should create user with status PENDING, role USER, and hashed password', async () => {
+      const hashedPassword = '$argon2id$v=19$m=19456,t=2,p=1$abcd$xyz';
+      (argon2.hash as jest.Mock).mockResolvedValue(hashedPassword);
+      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(null);
+      (usersService.createUser as jest.Mock).mockResolvedValue({
+        id: 'new-user-1',
+        email: 'newuser@example.com',
+        status: 'PENDING',
+        role: 'USER',
+      });
+      (usersService.updateUser as jest.Mock).mockResolvedValue({
+        id: 'new-user-1',
+        email: 'newuser@example.com',
+        status: 'PENDING',
+        role: 'USER',
+        passwordHash: hashedPassword,
+      });
+
+      const result = await service.register({
+        email: 'newuser@example.com',
+        password: 'Password123',
+        passwordConfirm: 'Password123',
+      });
+
+      expect(usersService.createUser).toHaveBeenCalledWith({
+        email: 'newuser@example.com',
+        password: 'Password123',
+      });
+      expect(usersService.updateUser).toHaveBeenCalledWith('new-user-1', {
+        passwordHash: hashedPassword,
+      });
+      expect(result).toEqual({
+        id: 'new-user-1',
+        email: 'newuser@example.com',
+        status: 'PENDING',
+      });
+    });
+
+    it('should reject register if email already exists', async () => {
+      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
+
+      await expect(
+        service.register({
+          email: 'test@example.com',
+          password: 'Password123',
+          passwordConfirm: 'Password123',
+        }),
+      ).rejects.toThrow('Email sudah terdaftar');
+    });
+  });
+
   describe('login', () => {
+    it('should successfully login ACTIVE user and set cookies with httpOnly and proper paths', async () => {
+      (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
+      (argon2.verify as jest.Mock).mockResolvedValue(true);
+      (jwtService.sign as jest.Mock).mockReturnValue('access-token-value');
+      (refreshTokenRepository.create as jest.Mock).mockResolvedValue({
+        id: 'token-1',
+      });
+
+      const res = createMockResponse() as Response;
+
+      const result = await service.login(
+        { email: 'test@example.com', password: 'Password123' },
+        res,
+      );
+
+      expect(result).toEqual({
+        id: 'user-1',
+        email: 'test@example.com',
+        role: 'USER',
+      });
+
+      // Check access_token cookie
+      const accessTokenCall = (res.cookie as jest.Mock).mock.calls.find(
+        (call: any[]) => call[0] === 'access_token',
+      );
+      expect(accessTokenCall).toBeDefined();
+      expect(accessTokenCall[1]).toBe('access-token-value');
+      expect(accessTokenCall[2]).toMatchObject({
+        httpOnly: true,
+        path: '/api',
+        sameSite: 'lax',
+        secure: false,
+        maxAge: 15 * 60 * 1000,
+      });
+
+      // Check refresh_token cookie
+      const refreshTokenCall = (res.cookie as jest.Mock).mock.calls.find(
+        (call: any[]) => call[0] === 'refresh_token',
+      );
+      expect(refreshTokenCall).toBeDefined();
+      expect(refreshTokenCall[2]).toMatchObject({
+        httpOnly: true,
+        path: '/api/auth',
+        sameSite: 'lax',
+        secure: false,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    });
+
+
     it('should reject login for PENDING user with appropriate message', async () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockPendingUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);

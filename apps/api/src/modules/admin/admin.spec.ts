@@ -193,6 +193,7 @@ describe('AdminService', () => {
       expect(usersService.updateUser).toHaveBeenCalledWith(userId, {
         status: 'ACTIVE',
       });
+      expect(auditLogRepository.create).toHaveBeenCalledWith(adminId, userId, 'REACTIVATE');
     });
 
     it('should reject reactivation of PENDING or ACTIVE user', async () => {
