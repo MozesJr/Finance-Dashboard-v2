@@ -10,7 +10,7 @@ async function bootstrap() {
 
   // Trust proxy only if explicitly enabled (for production behind reverse proxy)
   if (process.env.TRUST_PROXY === 'true') {
-    (app as any).set('trust proxy', 1);
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
   }
 
   // Middleware

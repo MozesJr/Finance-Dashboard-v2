@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import * as argon2 from '@node-rs/argon2';
+import { createHash } from 'crypto';
 
 jest.mock('@node-rs/argon2', () => ({
   hash: jest.fn(),
@@ -18,6 +19,11 @@ describe('AuthService', () => {
   let refreshTokenRepository: Partial<RefreshTokenRepository>;
   let jwtService: Partial<JwtService>;
   let configService: Partial<ConfigService>;
+
+  const createMockResponse = (): Partial<Response> => ({
+    cookie: jest.fn().mockReturnThis(),
+    clearCookie: jest.fn().mockReturnThis(),
+  });
 
   const mockUser = {
     id: 'user-1',
@@ -72,7 +78,7 @@ describe('AuthService', () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockPendingUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.login({ email: 'test@example.com', password: 'Password123' }, res),
@@ -83,7 +89,7 @@ describe('AuthService', () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockRejectedUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.login({ email: 'test@example.com', password: 'Password123' }, res),
@@ -94,7 +100,7 @@ describe('AuthService', () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockSuspendedUser);
       (argon2.verify as jest.Mock).mockResolvedValue(true);
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.login({ email: 'test@example.com', password: 'Password123' }, res),
@@ -105,7 +111,7 @@ describe('AuthService', () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(null);
       (argon2.verify as jest.Mock).mockRejectedValue(new Error('Verification failed'));
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.login({ email: 'nonexistent@example.com', password: 'Password123' }, res),
@@ -116,7 +122,7 @@ describe('AuthService', () => {
       (usersService.getUserByEmail as jest.Mock).mockResolvedValue(mockUser);
       (argon2.verify as jest.Mock).mockRejectedValue(new Error('Verification failed'));
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.login({ email: 'test@example.com', password: 'WrongPassword123' }, res),
@@ -139,8 +145,6 @@ describe('AuthService', () => {
       (usersService.getUserById as jest.Mock).mockResolvedValue(mockUser);
       (refreshTokenRepository.create as jest.Mock).mockResolvedValue({ id: 'token-2' });
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
-
       // Note: actual refresh would need proper password hash verification
       // This test validates the rotation logic path exists
     });
@@ -158,7 +162,7 @@ describe('AuthService', () => {
 
       (refreshTokenRepository.findByTokenHash as jest.Mock).mockResolvedValue(storedToken);
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.refresh('old-refresh-token', res),
@@ -180,7 +184,7 @@ describe('AuthService', () => {
 
       (refreshTokenRepository.findByTokenHash as jest.Mock).mockResolvedValue(storedToken);
 
-      const res = { cookie: jest.fn(), clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await expect(
         service.refresh('old-refresh-token', res),
@@ -194,7 +198,6 @@ describe('AuthService', () => {
   describe('logout', () => {
     it('should revoke refresh token on logout', async () => {
       const refreshToken = 'refresh-token';
-      const { createHash } = require('crypto');
       const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
       const storedToken = {
         id: 'token-1',
@@ -206,7 +209,7 @@ describe('AuthService', () => {
 
       (refreshTokenRepository.findByTokenHash as jest.Mock).mockResolvedValue(storedToken);
 
-      const res = { clearCookie: jest.fn() };
+      const res = createMockResponse() as Response;
 
       await service.logout(refreshToken, res);
 

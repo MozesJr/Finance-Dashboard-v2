@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { UsersRepository } from './users.repository';
 import { CreateUserInput } from '@shared/schemas';
 
@@ -32,11 +33,11 @@ export class UsersService {
     return this.usersRepository.findByEmail(email);
   }
 
-  async updateUser(id: string, data: any) {
+  async updateUser(id: string, data: Prisma.UserUpdateInput) {
     return this.usersRepository.update(id, data);
   }
 
-  async getAllUsers(where?: any) {
+  async getAllUsers(where?: Prisma.UserWhereInput) {
     return this.usersRepository.findAll(where);
   }
 }

@@ -6,15 +6,16 @@ import {
   Res,
   Req,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
-import { RegisterDtoSchema } from './dto/register.dto';
-import { LoginDtoSchema } from './dto/login.dto';
+import { RegisterDtoSchema, RegisterDto } from './dto/register.dto';
+import { LoginDtoSchema, LoginDto } from './dto/login.dto';
 import { Public, CurrentUser } from '../../common/decorators';
 import { JwtAuthGuard } from '../../common/guards';
+import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { CurrentUserData } from '../../common/types';
 
 @Controller('auth')
 export class AuthController {
@@ -24,30 +25,19 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(
-    @Body() body: any,
-    @Res({ passthrough: true }) res: Response,
+    @Body(new ZodValidationPipe(RegisterDtoSchema)) body: RegisterDto,
   ) {
-    try {
-      const validated = RegisterDtoSchema.parse(body);
-      return this.authService.register(validated);
-    } catch (error) {
-      throw new BadRequestException('Validasi gagal');
-    }
+    return this.authService.register(body);
   }
 
   @Post('login')
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
-    @Body() body: any,
+    @Body(new ZodValidationPipe(LoginDtoSchema)) body: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    try {
-      const validated = LoginDtoSchema.parse(body);
-      return this.authService.login(validated, res);
-    } catch (error) {
-      throw new BadRequestException('Validasi gagal');
-    }
+    return this.authService.login(body, res);
   }
 
   @Post('refresh')
@@ -56,7 +46,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken = (req.cookies as any)?.refresh_token;
+    const refreshToken = req.cookies?.refresh_token as string | undefined;
     if (!refreshToken) {
       throw new Error('Refresh token tidak ditemukan');
     }
@@ -69,16 +59,16 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken = (req.cookies as any)?.refresh_token;
-    return this.authService.logout(refreshToken || '', res);
+    const refreshToken = (req.cookies?.refresh_token as string) || '';
+    return this.authService.logout(refreshToken, res);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async me(@CurrentUser() user: any) {
+  async me(@CurrentUser() user: CurrentUserData) {
     return {
       id: user.userId,
-      email: user.email,
+      email: user.email || '',
       role: user.role,
     };
   }

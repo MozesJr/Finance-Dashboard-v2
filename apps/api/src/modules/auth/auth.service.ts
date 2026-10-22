@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
 import { createHash, randomBytes } from 'crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { UsersService } from '../users/users.service';
@@ -65,7 +66,7 @@ export class AuthService {
     };
   }
 
-  async login(input: LoginInput, res: any) {
+  async login(input: LoginInput, res: Response) {
     const user = await this.usersService.getUserByEmail(input.email);
 
     // Timing attack prevention: always verify password
@@ -134,7 +135,7 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshToken: string, res: any) {
+  async refresh(refreshToken: string, res: Response) {
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const storedToken = await this.refreshTokenRepository.findByTokenHash(refreshTokenHash);
 
@@ -145,7 +146,7 @@ export class AuthService {
     if (storedToken.revokedAt) {
       // Grace period check: if recently revoked and replacement token is active
       const timeSinceRevoked = Date.now() - storedToken.revokedAt.getTime();
-      if (timeSinceRevoked < GRACE_PERIOD_MS && (storedToken as any).replacedById) {
+      if (timeSinceRevoked < GRACE_PERIOD_MS && storedToken.replacedById) {
         // Race condition detected (multi-tab): return 401 without revoking all
         throw new UnauthorizedException('Sesi sudah diperbarui');
       }
@@ -212,7 +213,7 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string, res: any) {
+  async logout(refreshToken: string, res: Response) {
     const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const storedToken = await this.refreshTokenRepository.findByTokenHash(refreshTokenHash);
 

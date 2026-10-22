@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Prisma, UserStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { RefreshTokenRepository } from '../auth/refresh-token.repository';
 import { AuditLogRepository } from './audit-log.repository';
@@ -25,7 +26,7 @@ export class AdminService {
     const updated = await this.usersService.updateUser(targetUserId, {
       status: 'ACTIVE',
       approvedAt: new Date(),
-      approvedById: adminId,
+      approvedBy: { connect: { id: adminId } },
     });
 
     await this.auditLogRepository.create(adminId, targetUserId, 'APPROVE');
@@ -98,7 +99,9 @@ export class AdminService {
   }
 
   async getAllUsers(status?: string) {
-    const where = status ? { status } : undefined;
+    const where: Prisma.UserWhereInput | undefined = status
+      ? { status: status as UserStatus }
+      : undefined;
     return this.usersService.getAllUsers(where);
   }
 

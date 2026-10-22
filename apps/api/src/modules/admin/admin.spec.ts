@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UsersService } from '../users/users.service';
 import { RefreshTokenRepository } from '../auth/refresh-token.repository';
@@ -77,12 +76,12 @@ describe('AdminService', () => {
         status: 'ACTIVE',
       });
 
-      const result = await service.approveUser(adminId, userId);
+      await service.approveUser(adminId, userId);
 
       expect(usersService.updateUser).toHaveBeenCalledWith(userId, {
         status: 'ACTIVE',
         approvedAt: expect.any(Date),
-        approvedById: adminId,
+        approvedBy: { connect: { id: adminId } },
       });
       expect(auditLogRepository.create).toHaveBeenCalledWith(adminId, userId, 'APPROVE');
     });
@@ -110,7 +109,7 @@ describe('AdminService', () => {
         status: 'REJECTED',
       });
 
-      const result = await service.rejectUser(adminId, userId);
+      await service.rejectUser(adminId, userId);
 
       expect(refreshTokenRepository.revokeAllForUser).toHaveBeenCalledWith(userId);
       expect(usersService.updateUser).toHaveBeenCalledWith(userId, {

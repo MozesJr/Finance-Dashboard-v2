@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 
 @Injectable()
@@ -6,7 +7,7 @@ export class RefreshTokenRepository {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, tokenHash: string, expiresAt: Date) {
-    return this.prisma.refreshToken.create({
+    return (this.prisma as PrismaClient).refreshToken.create({
       data: {
         userId,
         tokenHash,
@@ -16,22 +17,22 @@ export class RefreshTokenRepository {
   }
 
   async findByTokenHash(tokenHash: string) {
-    return this.prisma.refreshToken.findUnique({ where: { tokenHash } as any });
+    return (this.prisma as PrismaClient).refreshToken.findUnique({ where: { tokenHash } });
   }
 
   async markAsRevoked(tokenHash: string, replacedById?: string) {
-    const data: any = { revokedAt: new Date() };
+    const data: Prisma.RefreshTokenUpdateInput = { revokedAt: new Date() };
     if (replacedById) {
       data.replacedById = replacedById;
     }
-    return this.prisma.refreshToken.update({
-      where: { tokenHash } as any,
+    return (this.prisma as PrismaClient).refreshToken.update({
+      where: { tokenHash },
       data,
     });
   }
 
   async revokeAllForUser(userId: string) {
-    return this.prisma.refreshToken.updateMany({
+    return (this.prisma as PrismaClient).refreshToken.updateMany({
       where: {
         userId,
         revokedAt: null,
@@ -43,7 +44,7 @@ export class RefreshTokenRepository {
   }
 
   async findActiveByUserId(userId: string) {
-    return this.prisma.refreshToken.findMany({
+    return (this.prisma as PrismaClient).refreshToken.findMany({
       where: {
         userId,
         revokedAt: null,
