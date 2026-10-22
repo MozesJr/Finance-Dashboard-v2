@@ -4,8 +4,13 @@ export default {
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
   ],
+  darkMode: 'selector',
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        primary: 'rgb(59, 130, 246)',
+      },
+    },
   },
   plugins: [],
 };
