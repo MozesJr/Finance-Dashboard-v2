@@ -27,8 +27,7 @@ export function WaitingApprovalPage() {
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Menunggu Persetujuan</h1>
             <p className="text-gray-400">
-              Akun Anda sedang menunggu persetujuan dari admin. Kami akan memberi tahu Anda melalui email
-              ketika akun Anda sudah disetujui.
+              Akun kamu sedang menunggu persetujuan admin. Silakan login kembali setelah disetujui.
             </p>
           </div>
 

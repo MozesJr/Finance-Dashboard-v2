@@ -31,6 +31,10 @@ describe('AuthService', () => {
     passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$',
     role: 'USER',
     status: 'ACTIVE',
+    approvedAt: new Date('2026-10-22'),
+    approvedById: 'admin-1',
+    createdAt: new Date('2026-10-20'),
+    updatedAt: new Date('2026-10-22'),
   };
 
   const mockPendingUser = { ...mockUser, status: 'PENDING' };
@@ -91,6 +95,10 @@ describe('AuthService', () => {
         status: 'PENDING',
         role: 'USER',
         passwordHash: hashedPassword,
+        approvedAt: null,
+        approvedById: null,
+        createdAt: new Date('2026-10-22'),
+        updatedAt: new Date('2026-10-22'),
       });
 
       const result = await service.register({
@@ -110,6 +118,11 @@ describe('AuthService', () => {
         id: 'new-user-1',
         email: 'newuser@example.com',
         status: 'PENDING',
+        role: 'USER',
+        approvedAt: null,
+        approvedById: null,
+        createdAt: new Date('2026-10-22'),
+        updatedAt: new Date('2026-10-22'),
       });
     });
 
@@ -172,6 +185,11 @@ describe('AuthService', () => {
         id: 'user-1',
         email: 'test@example.com',
         role: 'USER',
+        status: 'ACTIVE',
+        approvedAt: mockUser.approvedAt,
+        approvedById: mockUser.approvedById,
+        createdAt: mockUser.createdAt,
+        updatedAt: mockUser.updatedAt,
       });
       expect(result).not.toHaveProperty('passwordHash');
 

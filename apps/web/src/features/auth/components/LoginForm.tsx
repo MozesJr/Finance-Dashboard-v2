@@ -5,6 +5,7 @@ import { useLogin } from '../hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import { AxiosError } from 'axios';
 
 export function LoginForm() {
   const navigate = useNavigate();
@@ -26,11 +27,12 @@ export function LoginForm() {
     login(data, {
       onSuccess: (response) => {
         setUser(response);
-        const from = (location.state as any)?.from?.pathname || '/';
+        const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
         navigate(from);
       },
-      onError: (error: any) => {
-        const message = error.response?.data?.message || 'Login gagal';
+      onError: (error) => {
+        const axiosError = error as AxiosError<{ message: string }>;
+        const message = axiosError.response?.data?.message || 'Login gagal';
         setApiError(message);
       },
     });

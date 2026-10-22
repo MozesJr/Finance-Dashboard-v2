@@ -1,25 +1,22 @@
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, RegisterInput } from 'shared';
 import { useRegister } from '../hooks';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { AxiosError } from 'axios';
 
 export function RegisterForm() {
   const navigate = useNavigate();
   const { mutate: register, isPending } = useRegister();
   const [apiError, setApiError] = useState<string>('');
 
-  const {
-    register: registerField,
-    handleSubmit,
-    formState: { errors },
-    watch,
-  } = useForm<RegisterInput>({
+  const form = useForm<RegisterInput>({
     resolver: zodResolver(RegisterSchema),
   });
 
-  const password = watch('password') || '';
+  const { register: registerField, handleSubmit, formState: { errors } } = form;
+  const password = useWatch({ control: form.control, name: 'password' }) || '';
 
   const passwordReqs = {
     minLength: password.length >= 8,
@@ -33,8 +30,9 @@ export function RegisterForm() {
       onSuccess: () => {
         navigate('/menunggu-persetujuan');
       },
-      onError: (error: any) => {
-        const message = error.response?.data?.message || 'Registrasi gagal';
+      onError: (error) => {
+        const axiosError = error as AxiosError<{ message: string }>;
+        const message = axiosError.response?.data?.message || 'Registrasi gagal';
         setApiError(message);
       },
     });

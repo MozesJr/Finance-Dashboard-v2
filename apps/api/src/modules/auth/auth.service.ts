@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { createHash, randomBytes } from 'crypto';
 import { hash, verify } from '@node-rs/argon2';
-import { UsersService } from '../users/users.service';
+import { UsersService, toUserResponse } from '../users/users.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import { RegisterInput, LoginInput } from 'shared';
 
@@ -57,13 +57,9 @@ export class AuthService {
     });
 
     // Update dengan password hash yang sebenarnya
-    await this.usersService.updateUser(user.id, { passwordHash });
+    const updatedUser = await this.usersService.updateUser(user.id, { passwordHash });
 
-    return {
-      id: user.id,
-      email: user.email,
-      status: user.status,
-    };
+    return toUserResponse(updatedUser);
   }
 
   async login(input: LoginInput, res: Response) {
@@ -128,11 +124,7 @@ export class AuthService {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    return toUserResponse(user);
   }
 
   async refresh(refreshToken: string, res: Response) {
@@ -206,11 +198,7 @@ export class AuthService {
     // Clear old refresh token cookie (for old session cleanup)
     res.clearCookie('refresh_token', { path: '/api/auth' });
 
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    };
+    return toUserResponse(user);
   }
 
   async logout(refreshToken: string | undefined, res: Response) {

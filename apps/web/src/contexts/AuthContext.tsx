@@ -1,20 +1,7 @@
-import { createContext, ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import http from '@/lib/http';
-
-export interface User {
-  id: string;
-  email: string;
-  role: 'ADMIN' | 'USER';
-  status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
-}
-
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  setUser: (user: User | null) => void;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { User } from 'shared';
+import { AuthContext } from './Auth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

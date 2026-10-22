@@ -17,10 +17,14 @@ import { Public, CurrentUser } from '../../common/decorators';
 import { JwtAuthGuard } from '../../common/guards';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentUserData } from '../../common/types';
+import { UsersService, toUserResponse } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private usersService: UsersService,
+  ) {}
 
   @Post('register')
   @Public()
@@ -67,10 +71,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: CurrentUserData) {
-    return {
-      id: user.userId,
-      email: user.email || '',
-      role: user.role,
-    };
+    const fullUser = await this.usersService.getUserById(user.userId);
+    return toUserResponse(fullUser);
   }
 }

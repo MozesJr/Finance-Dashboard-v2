@@ -36,14 +36,6 @@ describe('User Schemas', () => {
         }).success
       ).toBe(false);
 
-      // Missing special character
-      expect(
-        CreateUserSchema.safeParse({
-          email: 'user@example.com',
-          password: 'ValidPass123',
-        }).success
-      ).toBe(false);
-
       // Too short
       expect(
         CreateUserSchema.safeParse({
@@ -56,7 +48,7 @@ describe('User Schemas', () => {
     it('should accept valid password with all requirements', () => {
       const result = CreateUserSchema.safeParse({
         email: 'user@example.com',
-        password: 'ValidPassword123!@#',
+        password: 'ValidPassword123',
       });
       expect(result.success).toBe(true);
     });

@@ -1,15 +1,9 @@
 import http from '@/lib/http';
+import { User } from 'shared';
 
 export interface LoginRequest {
   email: string;
   password: string;
-}
-
-export interface LoginResponse {
-  id: string;
-  email: string;
-  role: 'ADMIN' | 'USER';
-  status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
 }
 
 export interface RegisterRequest {
@@ -18,19 +12,13 @@ export interface RegisterRequest {
   passwordConfirm: string;
 }
 
-export interface RegisterResponse {
-  id: string;
-  email: string;
-  status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
-}
-
 export const authApi = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
+  login: async (data: LoginRequest): Promise<User> => {
     const response = await http.post('/auth/login', data);
     return response.data;
   },
 
-  register: async (data: RegisterRequest): Promise<RegisterResponse> => {
+  register: async (data: RegisterRequest): Promise<User> => {
     const response = await http.post('/auth/register', data);
     return response.data;
   },

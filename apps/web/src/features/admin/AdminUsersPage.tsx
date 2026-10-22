@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { UserStatus } from 'shared';
+import { UserStatus, User } from 'shared';
+import { AxiosError } from 'axios';
 import {
   useAdminUsers,
   useApproveUser,
@@ -41,13 +42,17 @@ export function AdminUsersPage() {
       setTimeout(() => setToast(null), 3000);
     };
 
-    const config = {
+    const config: {
+      onSuccess: () => void;
+      onError: (error: unknown) => void;
+    } = {
       onSuccess: () => {
         showToast(`Aksi berhasil`, 'success');
         setDialog({ isOpen: false });
       },
-      onError: (error: any) => {
-        const message = error.response?.data?.message || 'Aksi gagal';
+      onError: (error: unknown) => {
+        const axiosError = error as AxiosError<{ message: string }>;
+        const message = axiosError.response?.data?.message || 'Aksi gagal';
         showToast(message, 'error');
       },
     };
@@ -68,7 +73,7 @@ export function AdminUsersPage() {
     }
   };
 
-  const getActionButtons = (user: any) => {
+  const getActionButtons = (user: User) => {
     if (user.id === currentUser?.id) return null;
 
     const buttons = [];
@@ -198,7 +203,7 @@ export function AdminUsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {users.map((user: any) => (
+              {users.map((user: User) => (
                 <tr key={user.id} className="hover:bg-gray-800/50">
                   <td className="px-6 py-4 text-sm text-gray-200">{user.email}</td>
                   <td className="px-6 py-4 text-sm text-gray-200">{user.role}</td>
