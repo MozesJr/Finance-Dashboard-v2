@@ -10,7 +10,8 @@ import { WaitingApprovalPage } from '@/features/auth/WaitingApprovalPage';
 
 // Protected pages
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
-import { SavingsPage } from '@/pages/SavingsPage';
+import { SavingsPage } from '@/features/savings/SavingsPage';
+import { AllocationSettingsPage } from '@/features/savings/AllocationSettingsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
 import { WalletsPage } from '@/features/wallets/WalletsPage';
@@ -44,6 +45,7 @@ export function Router() {
           <Route path="/kategori" element={<CategoriesPage />} />
           <Route path="/transaksi" element={<TransactionsPage />} />
           <Route path="/tabungan" element={<SavingsPage />} />
+          <Route path="/tabungan/alokasi" element={<AllocationSettingsPage />} />
           <Route path="/pengaturan" element={<SettingsPage />} />
 
           {/* Admin routes */}
