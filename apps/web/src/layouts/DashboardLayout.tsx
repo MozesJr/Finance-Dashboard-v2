@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
+import { LayoutDashboard, Tags, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLogout } from '@/features/auth/hooks';
@@ -16,6 +16,7 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Dompet', path: '/dompet', icon: Wallet },
+  { label: 'Kategori', path: '/kategori', icon: Tags },
   { label: 'Tabungan', path: '/tabungan', icon: PiggyBank },
   { label: 'Pengaturan', path: '/pengaturan', icon: Settings },
 ];
