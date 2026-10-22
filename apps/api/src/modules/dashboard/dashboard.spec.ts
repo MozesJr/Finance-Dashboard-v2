@@ -5,6 +5,8 @@ import { WalletsService } from '../wallets/wallets.service';
 describe('percent helpers', () => {
   it('percentOf / percentChange tanpa float nominal', () => {
     expect(percentOf(1n, 3n)).toBe(33.3);
+    expect(percentOf(2n, 3n)).toBe(66.7);
+    expect(percentOf(1200000n, 1235000n) + percentOf(35000n, 1235000n)).toBe(100);
     expect(percentOf(5n, 0n)).toBe(0);
     expect(percentChange(150n, 100n)).toBe(50);
     expect(percentChange(50n, 100n)).toBe(-50);
