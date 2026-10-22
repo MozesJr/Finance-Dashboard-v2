@@ -58,6 +58,7 @@ export function PhaseToggle({ activePhase, requestedPhase, onRequestHandled }: P
         title={`Beralih ke ${target !== null ? PHASE_LABEL[target] : ''}?`}
         description="Porsi alokasi bulan ini akan mengikuti fase yang dipilih. Data transaksi dan tabungan tidak berubah."
         confirmLabel="Ya, beralih"
+        destructive={false}
         loading={update.isPending}
         onConfirm={confirm}
         onCancel={close}

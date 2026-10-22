@@ -1,11 +1,11 @@
-import { useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { CreateGoalSchema } from 'shared';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { FieldError, Input, Label, Select } from '@/components/ui/input';
+import { ColorInput, FieldError, Input, Label, Select } from '@/components/ui/input';
 import { useWallets } from '@/features/wallets/hooks';
 import { getErrorMessage } from '@/lib/errors';
 import type { GoalDto, GoalPayload } from '../api';
@@ -92,11 +92,16 @@ export function GoalFormDialog({ goal, defaultType = 'CUSTOM', onClose }: Props)
             <div className="flex gap-2">
               <div className="flex-1">
                 <Label htmlFor="g-icon">Ikon</Label>
-                <Input id="g-icon" maxLength={16} placeholder="🎯" {...register('icon')} />
+                <Input id="g-icon" maxLength={16} placeholder="🎯" {...register('icon', { setValueAs: emptyToNull })} />
+                <FieldError message={errors.icon?.message} />
               </div>
               <div>
                 <Label htmlFor="g-color">Warna</Label>
-                <Input id="g-color" type="color" className="h-10 w-12 p-1" {...register('color')} />
+                <Controller
+                  control={control}
+                  name="color"
+                  render={({ field }) => <ColorInput id="g-color" value={field.value} onChange={field.onChange} fallback="#38bdf8" className="w-12" />}
+                />
               </div>
             </div>
           </div>

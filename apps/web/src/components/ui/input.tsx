@@ -27,3 +27,28 @@ export function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1 text-xs text-expense">{message}</p>;
 }
+
+/** Input warna terkendali (nilai selalu dari state form, bukan dari default DOM). */
+export function ColorInput({
+  id,
+  value,
+  onChange,
+  fallback = '#3b82f6',
+  className,
+}: {
+  id: string;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+  fallback?: string;
+  className?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type="color"
+      value={value || fallback}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(fieldClass, 'h-10 w-16 p-1', className)}
+    />
+  );
+}

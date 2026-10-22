@@ -7,6 +7,8 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   loading?: boolean;
+  /** false untuk aksi yang tidak merusak data (tombol biasa, bukan merah). */
+  destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,6 +19,7 @@ export function ConfirmDialog({
   description,
   confirmLabel = 'Hapus',
   loading,
+  destructive = true,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -27,7 +30,7 @@ export function ConfirmDialog({
           <Button variant="ghost" onClick={onCancel}>
             Batal
           </Button>
-          <Button variant="danger" onClick={onConfirm} disabled={loading}>
+          <Button variant={destructive ? 'danger' : 'default'} onClick={onConfirm} disabled={loading}>
             {loading ? 'Memproses…' : confirmLabel}
           </Button>
         </div>

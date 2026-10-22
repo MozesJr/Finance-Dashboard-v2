@@ -1,9 +1,9 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CreateWalletSchema } from 'shared';
 import { Button } from '@/components/ui/button';
-import { FieldError, Input, Label, Select } from '@/components/ui/input';
+import { ColorInput, FieldError, Input, Label, Select } from '@/components/ui/input';
 import { getErrorMessage } from '@/lib/errors';
 import type { WalletDto, WalletPayload } from '../api';
 import { WALLET_TYPE_LABELS } from '../labels';
@@ -22,6 +22,7 @@ interface WalletFormProps {
 export function WalletForm({ wallet, submitting, error, onSubmit, onCancel }: WalletFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<FormInput, unknown, FormOutput>({
@@ -63,7 +64,11 @@ export function WalletForm({ wallet, submitting, error, onSubmit, onCancel }: Wa
       </div>
       <div>
         <Label htmlFor="wallet-color">Warna</Label>
-        <Input id="wallet-color" type="color" className="h-10 w-16 p-1" {...register('color')} />
+        <Controller
+          control={control}
+          name="color"
+          render={({ field }) => <ColorInput id="wallet-color" value={field.value} onChange={field.onChange} />}
+        />
         <FieldError message={errors.color?.message} />
       </div>
       {error != null && <p className="text-sm text-expense">{getErrorMessage(error)}</p>}

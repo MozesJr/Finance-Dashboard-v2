@@ -1,8 +1,8 @@
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CreateCategoryInput, CreateCategorySchema } from 'shared';
 import { Button } from '@/components/ui/button';
-import { FieldError, Input, Label, Select } from '@/components/ui/input';
+import { ColorInput, FieldError, Input, Label, Select } from '@/components/ui/input';
 import { getErrorMessage } from '@/lib/errors';
 import type { CategoryDto, CategoryPayload } from '../api';
 
@@ -18,6 +18,7 @@ interface CategoryFormProps {
 export function CategoryForm({ category, defaultType, submitting, error, onSubmit, onCancel }: CategoryFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<CreateCategoryInput>({
@@ -53,12 +54,16 @@ export function CategoryForm({ category, defaultType, submitting, error, onSubmi
       <div className="flex gap-4">
         <div className="flex-1">
           <Label htmlFor="cat-icon">Ikon (emoji)</Label>
-          <Input id="cat-icon" maxLength={16} placeholder="☕" {...register('icon')} />
+          <Input id="cat-icon" maxLength={16} placeholder="☕" {...register('icon', { setValueAs: (v) => (v === '' ? null : v) })} />
           <FieldError message={errors.icon?.message} />
         </div>
         <div>
           <Label htmlFor="cat-color">Warna</Label>
-          <Input id="cat-color" type="color" className="h-10 w-16 p-1" {...register('color')} />
+          <Controller
+            control={control}
+            name="color"
+            render={({ field }) => <ColorInput id="cat-color" value={field.value} onChange={field.onChange} />}
+          />
         </div>
       </div>
       {error != null && <p className="text-sm text-expense">{getErrorMessage(error)}</p>}
