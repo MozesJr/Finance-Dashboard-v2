@@ -30,6 +30,19 @@ describe('Money Utils', () => {
       expect(parseNominal('2.5m')).toBe(2500000n);
     });
 
+    it('should be exact for large values (no float)', () => {
+      expect(parseNominal('9007199254740993')).toBe(9007199254740993n);
+      expect(parseNominal('1,234jt')).toBe(1234000n);
+      expect(parseNominal('0,5jt')).toBe(500000n);
+      expect(parseNominal('Rp 1.250.000')).toBe(1250000n);
+    });
+
+    it('should throw on negative or malformed input', () => {
+      expect(() => parseNominal('-5rb')).toThrow();
+      expect(() => parseNominal('1..2')).toThrow();
+      expect(() => parseNominal('')).toThrow();
+    });
+
     it('should throw on invalid input', () => {
       expect(() => parseNominal('abc')).toThrow();
       expect(() => parseNominal('xyz123')).toThrow();

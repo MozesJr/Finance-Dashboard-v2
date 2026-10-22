@@ -1,70 +1,74 @@
+const SUFFIX_MULTIPLIERS: Array<[string, bigint]> = [
+  ['juta', 1_000_000n],
+  ['jt', 1_000_000n],
+  ['ribu', 1_000n],
+  ['rb', 1_000n],
+  ['k', 1_000n],
+  ['m', 1_000_000n],
+];
+
 /**
- * Parse Indonesian nominal formats to Rupiah (BigInt)
- * In Indonesian format: comma (,) is decimal separator, dot (.) is thousands separator
+ * Normalize an Indonesian-style number ("1.250.000", "1,2", "2.5") to a plain
+ * decimal string using "." as the only separator. Returns null if malformed.
+ */
+function normalizeNumber(numStr: string, hasSuffix: boolean): string | null {
+  const lastDot = numStr.lastIndexOf('.');
+  const lastComma = numStr.lastIndexOf(',');
+  let out: string;
+
+  if (lastComma > lastDot) {
+    const afterComma = numStr.length - lastComma - 1;
+    const commaCount = numStr.split(',').length - 1;
+    if (!hasSuffix && afterComma === 3 && commaCount >= 1 && lastDot === -1) {
+      out = numStr.replace(/,/g, ''); // "1,250" tanpa suffix = ribuan
+    } else {
+      out = numStr.replace(/\./g, '').replace(',', '.');
+    }
+  } else if (lastDot !== -1) {
+    const afterDot = numStr.length - lastDot - 1;
+    if (afterDot === 3) {
+      out = numStr.replace(/[.,]/g, ''); // pemisah ribuan
+    } else {
+      out = numStr.replace(/,/g, ''); // 1-2 digit (atau lainnya) = desimal
+    }
+  } else {
+    out = numStr;
+  }
+
+  return /^\d+(\.\d+)?$/.test(out) ? out : null;
+}
+
+/**
+ * Parse Indonesian nominal formats to Rupiah (BigInt) tanpa float.
  * Examples: "35rb" → 35000n, "1,2jt" → 1200000n, "1.250.000" → 1250000n, "2.5jt" → 2500000n
  */
 export function parseNominal(input: string): bigint {
-  let normalized = input.toLowerCase().trim();
+  let normalized = input.toLowerCase().replace(/\s+/g, '');
+  if (normalized.startsWith('rp')) normalized = normalized.slice(2);
 
-  // Remove spaces
-  normalized = normalized.replace(/\s+/g, '');
-
-  // Helper to normalize number string
-  const normalizeNumber = (numStr: string): string => {
-    // Find last dot and comma
-    const lastDot = numStr.lastIndexOf('.');
-    const lastComma = numStr.lastIndexOf(',');
-
-    // If there's a decimal separator (last dot or comma with 1-2 digits after)
-    if (lastComma > lastDot && lastComma !== -1) {
-      // Comma is decimal separator
-      // Remove all dots (thousands separators)
-      return numStr.replace(/\./g, '').replace(',', '.');
-    } else if (lastDot !== -1) {
-      const afterDot = numStr.substring(lastDot + 1);
-      if (afterDot.length <= 2 && /^\d+$/.test(afterDot)) {
-        // Dot with 1-2 digits = decimal separator
-        return numStr.replace(/,/g, '').replace(/\./g, '.');
-      } else if (afterDot.length === 3) {
-        // Dot with 3 digits = thousands separator
-        return numStr.replace(/[.,]/g, '');
-      }
+  let multiplier = 1n;
+  let hasSuffix = false;
+  for (const [suffix, mult] of SUFFIX_MULTIPLIERS) {
+    if (normalized.endsWith(suffix)) {
+      normalized = normalized.slice(0, -suffix.length);
+      multiplier = mult;
+      hasSuffix = true;
+      break;
     }
-
-    // No clear decimal separator, remove all separators
-    return numStr.replace(/[.,]/g, '');
-  };
-
-  // Handle Indonesian shorthand
-  if (normalized.includes('rb')) {
-    let numStr = normalized.replace('rb', '');
-    numStr = normalizeNumber(numStr);
-    const num = parseFloat(numStr);
-    return BigInt(Math.round(num * 1000));
   }
 
-  if (normalized.includes('jt')) {
-    let numStr = normalized.replace('jt', '');
-    numStr = normalizeNumber(numStr);
-    const num = parseFloat(numStr);
-    return BigInt(Math.round(num * 1000000));
-  }
-
-  if (normalized.includes('m')) {
-    let numStr = normalized.replace('m', '');
-    numStr = normalizeNumber(numStr);
-    const num = parseFloat(numStr);
-    return BigInt(Math.round(num * 1000000));
-  }
-
-  // Try direct parsing
-  const numStr = normalizeNumber(normalized);
-  const num = parseFloat(numStr);
-  if (isNaN(num)) {
+  const decimal = normalizeNumber(normalized, hasSuffix);
+  if (decimal === null) {
     throw new Error(`Cannot parse nominal: ${input}`);
   }
 
-  return BigInt(Math.round(num));
+  const [intPart, fracPart = ''] = decimal.split('.');
+  const scale = multiplier.toString().length - 1; // jumlah nol
+  const padded = fracPart.padEnd(scale + 1, '0');
+  const kept = padded.slice(0, scale);
+  const roundUp = padded.charCodeAt(scale) >= 53; // digit berikutnya >= 5
+  const value = BigInt(intPart) * multiplier + BigInt(kept || '0');
+  return roundUp ? value + 1n : value;
 }
 
 /**
