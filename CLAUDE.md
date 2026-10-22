@@ -46,6 +46,7 @@ Dua menu utama: (1) Dashboard arus kas, (2) Tabungan (goals: dana darurat, inves
 - Jangan install dependency baru tanpa menyebutkan alasannya.
 - Env var di .env.example, jangan hardcode secret.
 - Sebuah fase/tugas BELUM selesai sebelum `pnpm lint`, `pnpm typecheck`, `pnpm -r test`, dan build terkait lulus tanpa error. Laporkan output perintah-perintah itu, bukan klaim.
+- Verifikasi WAJIB memakai perintah root: `pnpm lint && pnpm typecheck && pnpm -r test` (+ build terkait). Jangan hanya --filter.
 
 ## Phases
 
