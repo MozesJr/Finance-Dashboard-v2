@@ -52,6 +52,21 @@ enum GoalType {
   CUSTOM
 }
 
+enum GoalTargetMode {
+  MANUAL
+  MONTHS_OF_EXPENSE
+}
+
+enum ContributionType {
+  DEPOSIT
+  WITHDRAW
+}
+
+enum AllocationKind {
+  EXPENSE
+  SAVING
+}
+
 enum CategoryType {
   INCOME
   EXPENSE
@@ -65,236 +80,256 @@ enum ReceiptStatus {
 
 // Models
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String @map("password_hash")
-  role          Role     @default(USER)
-  status        UserStatus @default(PENDING)
-  approvedAt    DateTime? @map("approved_at")
-  approvedById  String? @map("approved_by_id")
-  approvedBy    User?    @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvals     User[]   @relation("UserApprovals")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         Role       @default(USER)
+  status       UserStatus @default(PENDING)
+  approvedAt   DateTime?  @map("approved_at")
+  approvedById String?    @map("approved_by_id")
+  approvedBy   User?      @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvals    User[]     @relation("UserApprovals")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  refreshTokens RefreshToken[]
-  wallets       Wallet[]
-  categories    Category[]
-  transactions  Transaction[]
-  receipts      Receipt[]
-  savingsGoals  SavingsGoal[]
+  refreshTokens        RefreshToken[]
+  wallets              Wallet[]
+  categories           Category[]
+  transactions         Transaction[]
+  receipts             Receipt[]
+  savingsGoals         SavingsGoal[]
   savingsContributions SavingsContribution[]
-  allocationPlans AllocationPlan[]
-  budgets       Budget[]
-  recurringRules RecurringRule[]
-  merchantRules MerchantCategoryRule[]
-  aiInsights    AiInsight[]
-  telegramLink  TelegramLink?
-  telegramLinkCodes TelegramLinkCode[]
-  auditLogsAsAdmin AuditLog[] @relation("AdminAuditLogs")
+  allocationPlans      AllocationPlan[]
+  budgets              Budget[]
+  recurringRules       RecurringRule[]
+  merchantRules        MerchantCategoryRule[]
+  aiInsights           AiInsight[]
+  telegramLink         TelegramLink?
+  telegramLinkCodes    TelegramLinkCode[]
+  auditLogsAsAdmin     AuditLog[]             @relation("AdminAuditLogs")
 
   @@index([approvedById])
-
   @@map("users")
 }
 
 model RefreshToken {
-  id          String   @id @default(uuid())
-  userId      String @map("user_id")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash   String   @unique @map("token_hash")
-  expiresAt   DateTime @map("expires_at")
-  revokedAt   DateTime? @map("revoked_at")
-  replacedById String? @map("replaced_by_id")  // Track rotation: which token replaced this one
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedById String?   @map("replaced_by_id") // Track rotation: which token replaced this one
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
-
   @@map("refresh_tokens")
 }
 
 model AuditLog {
   id           String   @id @default(uuid())
-  adminId      String @map("admin_id")
+  adminId      String   @map("admin_id")
   admin        User     @relation("AdminAuditLogs", fields: [adminId], references: [id], onDelete: Cascade)
-  targetUserId String @map("target_user_id")
-  action       String   // APPROVE | REJECT | SUSPEND | REACTIVATE
+  targetUserId String   @map("target_user_id")
+  action       String // APPROVE | REJECT | SUSPEND | REACTIVATE
   details      Json?
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([adminId])
   @@index([targetUserId])
-
   @@map("audit_logs")
 }
 
 model Wallet {
-  id             String   @id @default(uuid())
-  userId         String @map("user_id")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String     @id @default(uuid())
+  userId         String     @map("user_id")
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
   type           WalletType
   color          String?
-  isArchived     Boolean  @default(false) @map("is_archived")
-  initialBalance BigInt   @default(0) @map("initial_balance")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  isArchived     Boolean    @default(false) @map("is_archived")
+  initialBalance BigInt     @default(0) @map("initial_balance")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
   transactions Transaction[] @relation("WalletTransactions")
   transfersTo  Transaction[] @relation("TransfersTo")
+  savingsGoals SavingsGoal[]
 
   @@index([userId])
-
   @@map("wallets")
 }
 
 model Category {
-  id       String   @id @default(uuid())
-  userId   String? @map("user_id")
-  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name     String
-  type     CategoryType
-  icon     String?
-  color    String?
-  isSystem Boolean  @default(false) @map("is_system")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String       @id @default(uuid())
+  userId    String?      @map("user_id")
+  user      User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      CategoryType
+  icon      String?
+  color     String?
+  isSystem  Boolean      @default(false) @map("is_system")
+  createdAt DateTime     @default(now()) @map("created_at")
 
-  transactions Transaction[]
-  budgets      Budget[]
-  recurringRules RecurringRule[]
-  merchantRules  MerchantCategoryRule[]
+  transactions    Transaction[]
+  budgets         Budget[]
+  recurringRules  RecurringRule[]
+  merchantRules   MerchantCategoryRule[]
+  allocationItems AllocationItemCategory[]
 
   @@unique([userId, name])
   @@index([userId])
-
   @@map("categories")
 }
 
 model Transaction {
-  id            String   @id @default(uuid())
-  userId        String @map("user_id")
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  walletId      String @map("wallet_id")
-  wallet        Wallet   @relation("WalletTransactions", fields: [walletId], references: [id], onDelete: Cascade)
-  toWalletId    String? @map("to_wallet_id")
-  toWallet      Wallet?  @relation("TransfersTo", fields: [toWalletId], references: [id], onDelete: SetNull)
-  categoryId    String? @map("category_id")
-  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  type          TxType
-  amount        BigInt
-  status        TxStatus @default(DRAFT)
-  merchant      String?
-  note          String?
-  date          DateTime @db.Date
-  source        TxSource @default(WEB)
-  receiptId     String? @map("receipt_id")
-  receipt       Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
-  aiConfidence  Float? @map("ai_confidence")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                  String               @id @default(uuid())
+  userId              String               @map("user_id")
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId            String               @map("wallet_id")
+  wallet              Wallet               @relation("WalletTransactions", fields: [walletId], references: [id], onDelete: Cascade)
+  toWalletId          String?              @map("to_wallet_id")
+  toWallet            Wallet?              @relation("TransfersTo", fields: [toWalletId], references: [id], onDelete: SetNull)
+  categoryId          String?              @map("category_id")
+  category            Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  type                TxType
+  amount              BigInt
+  status              TxStatus             @default(DRAFT)
+  merchant            String?
+  note                String?
+  date                DateTime             @db.Date
+  source              TxSource             @default(WEB)
+  receiptId           String?              @map("receipt_id")
+  receipt             Receipt?             @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  savingsContribution SavingsContribution?
+  aiConfidence        Float?               @map("ai_confidence")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([walletId])
   @@index([categoryId])
   @@index([userId, status, date])
-
   @@map("transactions")
 }
 
 model Receipt {
-  id         String   @id @default(uuid())
-  userId     String @map("user_id")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  filePath   String @map("file_path")
-  ocrText    String? @map("ocr_text")
-  parsedJson Json? @map("parsed_json")
+  id         String        @id @default(uuid())
+  userId     String        @map("user_id")
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filePath   String        @map("file_path")
+  ocrText    String?       @map("ocr_text")
+  parsedJson Json?         @map("parsed_json")
   status     ReceiptStatus @default(PENDING)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
 
   transactions Transaction[]
 
   @@index([userId])
-
   @@map("receipts")
 }
 
 model SavingsGoal {
-  id        String   @id @default(uuid())
-  userId    String @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  type      GoalType
-  target    BigInt
-  current   BigInt   @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String         @id @default(uuid())
+  userId       String         @map("user_id")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  type         GoalType
+  icon         String?
+  color        String?
+  targetMode   GoalTargetMode @default(MANUAL) @map("target_mode")
+  targetAmount BigInt?        @map("target_amount")
+  targetMonths Int?           @map("target_months")
+  targetDate   DateTime?      @map("target_date") @db.Date
+  walletId     String?        @map("wallet_id")
+  wallet       Wallet?        @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  isArchived   Boolean        @default(false) @map("is_archived")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  contributions SavingsContribution[]
+  contributions   SavingsContribution[]
   allocationItems AllocationItem[]
 
   @@index([userId])
-
+  @@index([walletId])
   @@map("savings_goals")
 }
 
 model SavingsContribution {
-  id        String   @id @default(uuid())
-  goalId    String @map("goal_id")
-  goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  userId    String @map("user_id")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount    BigInt
-  date      DateTime  @db.Date
-  note      String?
-  createdAt DateTime  @default(now()) @map("created_at")
+  id            String           @id @default(uuid())
+  goalId        String           @map("goal_id")
+  goal          SavingsGoal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId        String           @map("user_id")
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          ContributionType
+  amount        BigInt
+  date          DateTime         @db.Date
+  note          String?
+  transactionId String?          @unique @map("transaction_id")
+  transaction   Transaction?     @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime         @default(now()) @map("created_at")
 
   @@index([goalId])
   @@index([userId])
-
   @@map("savings_contributions")
 }
 
 model AllocationPlan {
-  id             String   @id @default(uuid())
-  userId         String @map("user_id")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  monthlyIncome  BigInt @map("monthly_income")
-  activePhase    Int @map("active_phase")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlyIncome BigInt   @map("monthly_income")
+  activePhase   Int      @map("active_phase")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   items AllocationItem[]
 
-  @@index([userId])
-
+  @@unique([userId])
   @@map("allocation_plans")
 }
 
 model AllocationItem {
-  id            String   @id @default(uuid())
-  planId        String @map("plan_id")
-  plan          AllocationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  phase         Int
-  name          String
-  percent       Int      // 0-100
-  color         String?
-  linkedGoalId  String? @map("linked_goal_id")
-  linkedGoal    SavingsGoal? @relation(fields: [linkedGoalId], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now()) @map("created_at")
+  id           String         @id @default(uuid())
+  planId       String         @map("plan_id")
+  plan         AllocationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  phase        Int
+  name         String
+  description  String?
+  kind         AllocationKind
+  percent      Int // 0-100
+  color        String?
+  icon         String?
+  sortOrder    Int            @default(0) @map("sort_order")
+  linkedGoalId String?        @map("linked_goal_id")
+  linkedGoal   SavingsGoal?   @relation(fields: [linkedGoalId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  categories AllocationItemCategory[]
 
   @@unique([planId, phase, name])
   @@index([planId])
   @@index([linkedGoalId])
-
   @@map("allocation_items")
+}
+
+model AllocationItemCategory {
+  itemId     String         @map("item_id")
+  item       AllocationItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  categoryId String         @map("category_id")
+  category   Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, categoryId])
+  @@index([categoryId])
+  @@map("allocation_item_categories")
 }
 
 model Budget {
   id         String   @id @default(uuid())
-  userId     String @map("user_id")
+  userId     String   @map("user_id")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryId String @map("category_id")
+  categoryId String   @map("category_id")
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   amount     BigInt
   month      DateTime @db.Date
@@ -304,50 +339,47 @@ model Budget {
   @@unique([userId, categoryId, month])
   @@index([userId])
   @@index([categoryId])
-
   @@map("budgets")
 }
 
 model RecurringRule {
   id          String   @id @default(uuid())
-  userId      String @map("user_id")
+  userId      String   @map("user_id")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryId  String @map("category_id")
+  categoryId  String   @map("category_id")
   category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   amount      BigInt
-  frequency   String   // DAILY | WEEKLY | MONTHLY | YEARLY
+  frequency   String // DAILY | WEEKLY | MONTHLY | YEARLY
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([categoryId])
-
   @@map("recurring_rules")
 }
 
 model MerchantCategoryRule {
-  id               String   @id @default(uuid())
-  userId           String @map("user_id")
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  merchantPattern  String @map("merchant_pattern")
-  categoryId       String @map("category_id")
-  category         Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantPattern String   @map("merchant_pattern")
+  categoryId      String   @map("category_id")
+  category        Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, merchantPattern])
   @@index([userId])
   @@index([categoryId])
-
   @@map("merchant_category_rules")
 }
 
 model AiInsight {
   id          String   @id @default(uuid())
-  userId      String @map("user_id")
+  userId      String   @map("user_id")
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period      String   // YYYY-MM format
+  period      String // YYYY-MM format
   kind        String
   content     Json
   generatedAt DateTime @map("generated_at")
@@ -355,7 +387,6 @@ model AiInsight {
 
   @@unique([userId, period, kind])
   @@index([userId])
-
   @@map("ai_insights")
 }
 
@@ -371,15 +402,14 @@ model TelegramLink {
 }
 
 model TelegramLinkCode {
-  id        String   @id @default(uuid())
-  userId    String @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String   // 6 digit
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String // 6 digit
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
-
   @@map("telegram_link_codes")
 }
