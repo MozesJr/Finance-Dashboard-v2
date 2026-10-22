@@ -1,3 +1,4 @@
+@import './styles/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,4 +21,9 @@ html {
     'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--fg));
 }

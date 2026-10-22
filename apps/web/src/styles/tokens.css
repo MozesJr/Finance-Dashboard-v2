@@ -1,0 +1,21 @@
+/* Design tokens (tema gelap). Komponen memakai token lewat class Tailwind, bukan hex langsung. */
+:root {
+  --bg: 3 7 18;
+  --surface: 17 24 39;
+  --surface-2: 31 41 55;
+  --line: 55 65 81;
+  --fg: 243 244 246;
+  --muted: 156 163 175;
+  --primary: 59 130 246;
+  --primary-fg: 255 255 255;
+  --income: 52 211 153;
+  --expense: 248 113 113;
+  --warning: 251 191 36;
+
+  /* Aksen per pos */
+  --accent-perpuluhan: 168 85 247;
+  --accent-kebutuhan: 74 222 128;
+  --accent-darurat: 251 191 36;
+  --accent-investasi: 56 189 248;
+  --accent-gaya-hidup: 244 114 182;
+}
