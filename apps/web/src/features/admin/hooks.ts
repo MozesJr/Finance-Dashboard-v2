@@ -9,10 +9,11 @@ export function useAdminUsers(status?: UserStatus) {
   });
 }
 
-export function useAdminStats() {
+export function useAdminStats(enabled = true) {
   return useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: () => adminApi.getStats(),
+    enabled,
   });
 }
 

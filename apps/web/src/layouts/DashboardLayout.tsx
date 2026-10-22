@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Tags, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
+import { ArrowLeftRight, LayoutDashboard, Tags, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLogout } from '@/features/auth/hooks';
@@ -15,6 +15,7 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Transaksi', path: '/transaksi', icon: ArrowLeftRight },
   { label: 'Dompet', path: '/dompet', icon: Wallet },
   { label: 'Kategori', path: '/kategori', icon: Tags },
   { label: 'Tabungan', path: '/tabungan', icon: PiggyBank },
@@ -26,7 +27,7 @@ export function DashboardLayout() {
   const location = useLocation();
   const { user, setUser } = useAuth();
   const { mutate: logout } = useLogout();
-  const { data: adminStats } = useAdminStats();
+  const { data: adminStats } = useAdminStats(user?.role === 'ADMIN');
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
   // Drawer tertutup otomatis saat pindah halaman.
   const drawerOpen = drawerPath === location.pathname;
