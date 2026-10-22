@@ -54,12 +54,24 @@ export const PutPhaseItemsSchema = z
     }
     const names = new Set<string>();
     const categories = new Map<string, string>();
+    const goals = new Map<string, string>();
     for (const [index, item] of items.entries()) {
       const key = item.name.toLowerCase();
       if (names.has(key)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'name'], message: `Nama pos "${item.name}" dipakai dua kali` });
       }
       names.add(key);
+      if (item.goalId) {
+        const owner = goals.get(item.goalId);
+        if (owner) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['items', index, 'goalId'],
+            message: `Satu goal hanya boleh di satu pos (sudah dipakai "${owner}")`,
+          });
+        }
+        goals.set(item.goalId, item.name);
+      }
       for (const categoryId of item.categoryIds) {
         const owner = categories.get(categoryId);
         if (owner) {

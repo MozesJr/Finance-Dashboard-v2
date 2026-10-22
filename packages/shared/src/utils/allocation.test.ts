@@ -64,6 +64,10 @@ describe('PutPhaseItemsSchema', () => {
     if (!r.success) expect(r.error.issues[0].message).toBe('Total persen fase harus 100% (saat ini 90%)');
   });
 
+  it('menolak goal yang sama di dua pos', () => {
+    expect(PutPhaseItemsSchema.safeParse({ items: [saving('A', 50), saving('B', 50)] }).success).toBe(false);
+  });
+
   it('menolak kategori dobel, nama dobel, EXPENSE tanpa kategori, SAVING tanpa goal', () => {
     expect(PutPhaseItemsSchema.safeParse({ items: [expense('A', 50, ['c1']), expense('B', 50, ['c1'])] }).success).toBe(false);
     expect(PutPhaseItemsSchema.safeParse({ items: [expense('A', 50, ['c1']), expense('a', 50, ['c2'])] }).success).toBe(false);
