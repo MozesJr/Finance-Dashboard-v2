@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { TxSource, TxStatus } from '@prisma/client';
 import { checkTransactionShape, getTodayInJakarta } from 'shared';
 import { WalletsService } from '../wallets/wallets.service';
@@ -113,6 +113,7 @@ export class TransactionsService {
 
   async update(userId: string, id: string, input: UpdateTransactionInput): Promise<TransactionResponse> {
     const existing = await this.getOwned(userId, id);
+    await this.assertNotSavingsTransfer(userId, id);
     const merged: TransactionWriteData = {
       type: input.type ?? existing.type,
       walletId: input.walletId ?? existing.walletId,
@@ -130,7 +131,14 @@ export class TransactionsService {
 
   async remove(userId: string, id: string): Promise<void> {
     await this.getOwned(userId, id);
+    await this.assertNotSavingsTransfer(userId, id);
     await this.repository.delete(userId, id);
+  }
+
+  private async assertNotSavingsTransfer(userId: string, id: string): Promise<void> {
+    if (await this.repository.hasSavingsContribution(userId, id)) {
+      throw new ConflictException('Transaksi ini dibuat dari kontribusi tabungan. Ubah atau hapus lewat halaman Tabungan.');
+    }
   }
 
   private async getOwned(userId: string, id: string): Promise<TransactionWithRelations> {

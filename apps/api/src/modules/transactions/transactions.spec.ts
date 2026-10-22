@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CreateTransactionSchema } from 'shared';
 import { decodeCursor, encodeCursor, TransactionsService } from './transactions.service';
 import { TransactionsRepository } from './transactions.repository';
@@ -43,6 +43,7 @@ describe('TransactionsService', () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      hasSavingsContribution: jest.fn().mockResolvedValue(false),
     } as unknown as jest.Mocked<TransactionsRepository>;
     wallets = { getOwned: jest.fn() } as unknown as jest.Mocked<WalletsService>;
     categories = { getVisible: jest.fn() } as unknown as jest.Mocked<CategoriesService>;
@@ -120,6 +121,15 @@ describe('TransactionsService', () => {
       BadRequestException,
     );
     expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('transfer hasil kontribusi tabungan tidak bisa diubah/dihapus dari transaksi (409)', async () => {
+    repo.findById.mockResolvedValue(row({ type: 'TRANSFER', toWalletId: W2, categoryId: null }) as never);
+    repo.hasSavingsContribution.mockResolvedValue(true);
+    await expect(service.update('u1', 't1', { note: 'x' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.remove('u1', 't1')).rejects.toBeInstanceOf(ConflictException);
+    expect(repo.update).not.toHaveBeenCalled();
+    expect(repo.delete).not.toHaveBeenCalled();
   });
 
   it('list: limit+1 diminta, nextCursor terisi bila ada halaman berikut', async () => {

@@ -99,6 +99,12 @@ export class TransactionsRepository {
     await this.prisma.transaction.updateMany({ where: { id, userId }, data });
   }
 
+  /** Transfer yang dibuat dari kontribusi tabungan (dikelola dari halaman Tabungan). */
+  async hasSavingsContribution(userId: string, id: string): Promise<boolean> {
+    const count = await this.prisma.savingsContribution.count({ where: { userId, transactionId: id } });
+    return count > 0;
+  }
+
   async delete(userId: string, id: string): Promise<void> {
     await this.prisma.transaction.deleteMany({ where: { id, userId } });
   }
