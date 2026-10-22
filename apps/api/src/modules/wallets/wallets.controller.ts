@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { WalletsService } from './wallets.service';
 import { CurrentUser } from '../../common/decorators';
 import { CurrentUserData } from '../../common/types';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { parseUuid } from '../../common/pipes/parse-uuid.pipe';
 import {
   CreateWalletInput,
   CreateWalletSchema,
@@ -25,7 +26,7 @@ export class WalletsController {
   }
 
   @Get(':id')
-  get(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
+  get(@CurrentUser() user: CurrentUserData, @Param('id', parseUuid()) id: string) {
     return this.walletsService.get(user.userId, id);
   }
 
@@ -40,7 +41,7 @@ export class WalletsController {
   @Patch(':id')
   update(
     @CurrentUser() user: CurrentUserData,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', parseUuid()) id: string,
     @Body(new ZodValidationPipe(UpdateWalletSchema)) body: UpdateWalletInput,
   ) {
     return this.walletsService.update(user.userId, id, body);
@@ -48,7 +49,7 @@ export class WalletsController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@CurrentUser() user: CurrentUserData, @Param('id', ParseUUIDPipe) id: string) {
+  async remove(@CurrentUser() user: CurrentUserData, @Param('id', parseUuid()) id: string) {
     await this.walletsService.remove(user.userId, id);
   }
 }
