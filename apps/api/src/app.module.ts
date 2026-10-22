@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import * as path from 'path';
-import { PrismaService } from './prisma.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { JwtAuthGuard } from './common/guards';
 import { APP_GUARD } from '@nestjs/core';
+import { PrismaModule } from './prisma.module';
 
 @Module({
   imports: [
@@ -21,17 +21,16 @@ import { APP_GUARD } from '@nestjs/core';
         limit: 100,
       },
     ]),
+    PrismaModule,
     AuthModule,
     UsersModule,
     AdminModule,
   ],
   providers: [
-    PrismaService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [PrismaService],
 })
-export class AppModule {}
+export class AppModule { }
