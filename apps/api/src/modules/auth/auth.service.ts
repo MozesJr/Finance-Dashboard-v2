@@ -6,7 +6,7 @@ import { createHash, randomBytes } from 'crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { UsersService } from '../users/users.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
-import { RegisterInput, LoginInput } from '@shared/schemas';
+import { RegisterInput, LoginInput } from 'shared';
 
 const GRACE_PERIOD_MS = 10 * 1000; // 10 seconds
 

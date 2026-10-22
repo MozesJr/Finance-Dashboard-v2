@@ -114,6 +114,9 @@ importers:
       reflect-metadata:
         specifier: ^0.1.13
         version: 0.1.14
+      shared:
+        specifier: workspace:*
+        version: link:../../packages/shared
       zod:
         specifier: ^3.22.0
         version: 3.25.76

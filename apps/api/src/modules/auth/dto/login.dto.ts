@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LoginSchema } from '@shared/schemas';
+import { LoginSchema } from 'shared';
 
 export const LoginDtoSchema = LoginSchema;
 export type LoginDto = z.infer<typeof LoginDtoSchema>;

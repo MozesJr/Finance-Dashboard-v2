@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { UsersRepository } from './users.repository';
-import { CreateUserInput } from '@shared/schemas';
+import { CreateUserInput } from 'shared';
 
 @Injectable()
 export class UsersService {
