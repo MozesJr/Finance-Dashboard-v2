@@ -149,11 +149,11 @@ describe('AuthService', () => {
 
       // Check access_token cookie
       const accessTokenCall = (res.cookie as jest.Mock).mock.calls.find(
-        (call: any[]) => call[0] === 'access_token',
+        (call: unknown[]) => (call as string[])[0] === 'access_token',
       );
       expect(accessTokenCall).toBeDefined();
-      expect(accessTokenCall[1]).toBe('access-token-value');
-      expect(accessTokenCall[2]).toMatchObject({
+      expect((accessTokenCall as unknown[])[1]).toBe('access-token-value');
+      expect((accessTokenCall as unknown[])[2]).toMatchObject({
         httpOnly: true,
         path: '/api',
         sameSite: 'lax',
@@ -163,10 +163,10 @@ describe('AuthService', () => {
 
       // Check refresh_token cookie
       const refreshTokenCall = (res.cookie as jest.Mock).mock.calls.find(
-        (call: any[]) => call[0] === 'refresh_token',
+        (call: unknown[]) => (call as string[])[0] === 'refresh_token',
       );
       expect(refreshTokenCall).toBeDefined();
-      expect(refreshTokenCall[2]).toMatchObject({
+      expect((refreshTokenCall as unknown[])[2]).toMatchObject({
         httpOnly: true,
         path: '/api/auth',
         sameSite: 'lax',
@@ -295,6 +295,14 @@ describe('AuthService', () => {
       // Should NOT revoke all tokens within grace period
       expect(refreshTokenRepository.revokeAllForUser).not.toHaveBeenCalled();
     });
+
+    it('should reject refresh without cookie token', async () => {
+      const res = createMockResponse() as Response;
+
+      await expect(
+        service.refresh('', res),
+      ).rejects.toThrow('Token tidak valid');
+    });
   });
 
   describe('logout', () => {
@@ -317,6 +325,19 @@ describe('AuthService', () => {
 
       expect(refreshTokenRepository.markAsRevoked).toHaveBeenCalledWith(tokenHash);
       expect(res.clearCookie).toHaveBeenCalledTimes(2);
+    });
+
+    it('should be idempotent: logout without token still clears cookies and returns 200', async () => {
+      const res = createMockResponse() as Response;
+
+      const result = await service.logout(undefined, res);
+
+      expect(result).toEqual({ message: 'Logout berhasil' });
+      expect(res.clearCookie).toHaveBeenCalledTimes(2);
+      expect(res.clearCookie).toHaveBeenCalledWith('access_token', { path: '/api' });
+      expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', { path: '/api/auth' });
+      // Should not try to find/revoke token in DB when no token provided
+      expect(refreshTokenRepository.findByTokenHash).not.toHaveBeenCalled();
     });
   });
 });

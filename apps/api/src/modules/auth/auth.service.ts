@@ -213,12 +213,14 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string, res: Response) {
-    const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const storedToken = await this.refreshTokenRepository.findByTokenHash(refreshTokenHash);
+  async logout(refreshToken: string | undefined, res: Response) {
+    if (refreshToken) {
+      const refreshTokenHash = createHash('sha256').update(refreshToken).digest('hex');
+      const storedToken = await this.refreshTokenRepository.findByTokenHash(refreshTokenHash);
 
-    if (storedToken && !storedToken.revokedAt) {
-      await this.refreshTokenRepository.markAsRevoked(refreshTokenHash);
+      if (storedToken && !storedToken.revokedAt) {
+        await this.refreshTokenRepository.markAsRevoked(refreshTokenHash);
+      }
     }
 
     res.clearCookie('access_token', { path: '/api' });

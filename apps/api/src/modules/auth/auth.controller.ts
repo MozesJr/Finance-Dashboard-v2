@@ -6,6 +6,7 @@ import {
   Res,
   Req,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
@@ -48,18 +49,18 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies?.refresh_token as string | undefined;
     if (!refreshToken) {
-      throw new Error('Refresh token tidak ditemukan');
+      throw new UnauthorizedException('Sesi tidak valid, silakan login ulang');
     }
     return this.authService.refresh(refreshToken, res);
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
+  @Public()
   async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken = (req.cookies?.refresh_token as string) || '';
+    const refreshToken = req.cookies?.refresh_token as string | undefined;
     return this.authService.logout(refreshToken, res);
   }
 
