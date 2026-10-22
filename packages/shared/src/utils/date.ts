@@ -74,3 +74,28 @@ export function getMonthEnd(date: Date = new Date()): Date {
 
   return lastDay;
 }
+
+/** Bulan berjalan di Asia/Jakarta, format YYYY-MM */
+export function getCurrentMonthJakarta(now: Date = new Date()): string {
+  return getPeriod(now);
+}
+
+/** Geser bulan YYYY-MM sebanyak delta bulan (boleh negatif). */
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const index = y * 12 + (m - 1) + delta;
+  const year = Math.floor(index / 12);
+  const mon = (index % 12 + 12) % 12 + 1;
+  return `${String(year).padStart(4, '0')}-${String(mon).padStart(2, '0')}`;
+}
+
+/**
+ * Rentang tanggal kalender sebuah bulan: start inklusif, endExclusive = tanggal 1 bulan berikutnya.
+ * Kolom transaksi bertipe DATE (sudah tanggal Asia/Jakarta), jadi batas bulan cukup tanggal kalender.
+ */
+export function getMonthRange(month: string): { start: Date; endExclusive: Date } {
+  return {
+    start: new Date(`${month}-01T00:00:00Z`),
+    endExclusive: new Date(`${shiftMonth(month, 1)}-01T00:00:00Z`),
+  };
+}
