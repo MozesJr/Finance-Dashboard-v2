@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import * as argon2 from 'argon2';
+import { hash } from '@node-rs/argon2';
 
 import * as path from 'path';
 import { config } from 'dotenv';
@@ -47,7 +47,7 @@ async function main() {
     throw new Error('ADMIN_EMAIL dan ADMIN_PASSWORD wajib diisi di apps/api/.env');
   }
 
-  const passwordHash = await argon2.hash(adminPassword);
+  const passwordHash = await hash(adminPassword);
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
