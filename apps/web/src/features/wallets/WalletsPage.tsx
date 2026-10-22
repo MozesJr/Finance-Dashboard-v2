@@ -97,7 +97,7 @@ export function WalletsPage() {
               <Card key={w.id} className={cn('flex flex-col gap-3', w.isArchived && 'opacity-60')}>
                 <div className="flex items-center gap-3">
                   <span
-                    className="flex h-9 w-9 items-center justify-center rounded-full"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2"
                     style={{ backgroundColor: w.color ?? undefined }}
                   >
                     <Icon className="h-4 w-4 text-white" />

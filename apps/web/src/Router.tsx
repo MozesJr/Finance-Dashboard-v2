@@ -9,7 +9,7 @@ import { RegisterPage } from '@/features/auth/RegisterPage';
 import { WaitingApprovalPage } from '@/features/auth/WaitingApprovalPage';
 
 // Protected pages
-import { DashboardPage } from '@/pages/DashboardPage';
+import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { SavingsPage } from '@/pages/SavingsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 

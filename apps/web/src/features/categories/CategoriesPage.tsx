@@ -94,7 +94,7 @@ export function CategoriesPage() {
           {categories.map((c) => (
             <Card key={c.id} className="flex items-center gap-3 p-3">
               <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-lg"
                 style={{ backgroundColor: c.color ?? undefined }}
               >
                 {c.icon ?? '🏷️'}
