@@ -13,6 +13,8 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { SavingsPage } from '@/pages/SavingsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
+import { WalletsPage } from '@/features/wallets/WalletsPage';
+
 // Admin pages
 import { AdminUsersPage } from '@/features/admin/AdminUsersPage';
 
@@ -34,6 +36,7 @@ export function Router() {
           }
         >
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/dompet" element={<WalletsPage />} />
           <Route path="/tabungan" element={<SavingsPage />} />
           <Route path="/pengaturan" element={<SettingsPage />} />
 
