@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { isCookieSecure } from '../../common/runtime-config';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
@@ -21,6 +22,10 @@ export class AuthService {
     private refreshTokenRepository: RefreshTokenRepository,
   ) {
     this.initDummyHash();
+  }
+
+  private get cookieSecure(): boolean {
+    return isCookieSecure((key) => this.configService.get<string>(key));
   }
 
   private async initDummyHash() {
@@ -112,7 +117,7 @@ export class AuthService {
       httpOnly: true,
       path: '/api',
       sameSite: 'lax',
-      secure: this.configService.get('NODE_ENV') === 'production',
+      secure: this.cookieSecure,
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
@@ -120,7 +125,7 @@ export class AuthService {
       httpOnly: true,
       path: '/api/auth',
       sameSite: 'lax',
-      secure: this.configService.get('NODE_ENV') === 'production',
+      secure: this.cookieSecure,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -183,7 +188,7 @@ export class AuthService {
       httpOnly: true,
       path: '/api',
       sameSite: 'lax',
-      secure: this.configService.get('NODE_ENV') === 'production',
+      secure: this.cookieSecure,
       maxAge: 15 * 60 * 1000,
     });
 
@@ -191,7 +196,7 @@ export class AuthService {
       httpOnly: true,
       path: '/api/auth',
       sameSite: 'lax',
-      secure: this.configService.get('NODE_ENV') === 'production',
+      secure: this.cookieSecure,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

@@ -10,10 +10,13 @@ const NAME_PATTERN = /^[a-f0-9-]{36}\.(jpg|png|webp)$/;
 @Injectable()
 export class ReceiptStorageService {
   readonly root: string;
+  /** Folder berisi <lang>.traineddata.gz yang dibundel di image; bila diset, OCR tidak mengunduh apa pun. */
+  readonly bundledLangDir: string | undefined;
 
   constructor(config: ConfigService) {
     const configured = config.get<string>('RECEIPT_STORAGE_DIR')?.trim();
     // Default: apps/api/storage/receipts (src/modules/receipts → apps/api).
+    this.bundledLangDir = config.get<string>('TESSDATA_DIR')?.trim() || undefined;
     this.root = configured ? path.resolve(configured) : path.resolve(__dirname, '../../../storage/receipts');
   }
 

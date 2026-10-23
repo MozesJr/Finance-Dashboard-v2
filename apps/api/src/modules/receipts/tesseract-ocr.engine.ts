@@ -58,7 +58,11 @@ export class TesseractOcrEngine implements OnModuleDestroy {
 
   private getWorker(): Promise<Worker> {
     if (!this.worker) {
-      this.worker = createWorker(['ind', 'eng'], 1, { cachePath: this.storage.tessdataDir, logger: () => undefined });
+      this.worker = createWorker(['ind', 'eng'], 1, {
+        cachePath: this.storage.tessdataDir,
+        ...(this.storage.bundledLangDir ? { langPath: this.storage.bundledLangDir } : {}),
+        logger: () => undefined,
+      });
     }
     return this.worker;
   }

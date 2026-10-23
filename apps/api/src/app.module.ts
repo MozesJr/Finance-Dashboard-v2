@@ -21,6 +21,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
 import { InsightsModule } from './modules/insights/insights.module';
+import { HealthModule } from './modules/health/health.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { PrismaModule } from './prisma.module';
       },
     ]),
     PrismaModule,
+    HealthModule,
     AiModule,
     AuthModule,
     UsersModule,
