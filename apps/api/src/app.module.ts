@@ -17,6 +17,7 @@ import { MerchantRulesModule } from './modules/merchant-rules/merchant-rules.mod
 import { TelegramLinkModule } from './modules/telegram-link/telegram-link.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BotModule } from './modules/bot/bot.module';
+import { AiModule } from './modules/ai/ai.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -32,6 +33,7 @@ import { PrismaModule } from './prisma.module';
       },
     ]),
     PrismaModule,
+    AiModule,
     AuthModule,
     UsersModule,
     AdminModule,
