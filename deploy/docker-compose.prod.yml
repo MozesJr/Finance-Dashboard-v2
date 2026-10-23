@@ -1,0 +1,85 @@
+# Jalankan dari ROOT repo:
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod up -d
+# Project dan nama container berbeda dari versi lama ("finance-dashboard").
+name: dashboardfinance-v2
+
+services:
+  api:
+    container_name: dfv2-api
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-dev}
+    image: dfv2-api:${GIT_COMMIT:-dev}
+    restart: unless-stopped
+    env_file: .env.prod
+    # Tanpa `ports`: api hanya terjangkau dari web lewat network internal.
+    # JANGAN scale > 1: bot Telegram polling hanya boleh satu instance per token.
+    networks: [internal, master_db_net]
+    volumes:
+      - receipts:/data/receipts
+    mem_limit: 512m
+    cpus: 1.0
+    init: true
+    stop_grace_period: 20s
+    logging: &log
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    container_name: dfv2-web
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    image: dfv2-web:${GIT_COMMIT:-dev}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+    ports:
+      - "${WEB_PORT:-8098}:80"
+    mem_limit: 128m
+    cpus: 0.5
+    logging: *log
+
+  # One-shot, hanya dijalankan manual (profile "tools"), bukan setiap boot:
+  #   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod --profile tools run --rm migrate
+  migrate:
+    profiles: [tools]
+    container_name: dfv2-migrate
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: tools
+    image: dfv2-tools:${GIT_COMMIT:-dev}
+    env_file: .env.prod
+    networks: [master_db_net]
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    mem_limit: 512m
+
+  # Buat admin / nonaktifkan admin lama (lihat docs/DEPLOY.md langkah 10):
+  #   ... --profile tools run --rm -e NEW_ADMIN_EMAIL=... -e NEW_ADMIN_PASSWORD=... create-admin
+  create-admin:
+    profiles: [tools]
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: tools
+    image: dfv2-tools:${GIT_COMMIT:-dev}
+    env_file: .env.prod
+    networks: [master_db_net]
+    volumes:
+      - ./create-admin.ts:/repo/apps/api/deploy/create-admin.ts:ro
+    entrypoint: ["pnpm", "exec", "ts-node", "deploy/create-admin.ts"]
+    mem_limit: 512m
+
+networks:
+  internal:
+  master_db_net:
+    external: true
+
+volumes:
+  receipts:

@@ -1,0 +1,50 @@
+# Uji lokal di Mac. DB = tunnel SSH di host :5433 (DB berisi data ASLI: jangan migrate, jangan seed).
+#   docker compose -f deploy/docker-compose.local-test.yml up -d --build
+name: dfv2-localtest
+
+services:
+  api:
+    container_name: dfv2-local-api
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+      args:
+        GIT_COMMIT: local-test
+    environment:
+      NODE_ENV: production
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "false"
+      APP_URL: http://localhost:8080
+      # DATABASE_URL dan JWT_SECRET dari env shell (tidak ditulis di file); host-gateway ke tunnel di Mac.
+      DATABASE_URL: ${LOCAL_TEST_DATABASE_URL:?isi LOCAL_TEST_DATABASE_URL (host host.docker.internal:5433)}
+      JWT_SECRET: ${LOCAL_TEST_JWT_SECRET:-local-test-secret-not-for-production-0123456789}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://9router.gamabms.tech/v1}
+      LLM_MODEL: ${LLM_MODEL:-smartgov/qwen3.8-27b}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      RECEIPT_PARSER: ocr
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_MODE: polling
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [internal]
+    volumes:
+      - receipts-test:/data/receipts
+
+  web:
+    container_name: dfv2-local-web
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+    ports:
+      - "8080:80"
+
+networks:
+  internal:
+
+volumes:
+  receipts-test:
