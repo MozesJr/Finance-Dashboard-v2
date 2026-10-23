@@ -96,3 +96,11 @@ export function formatRupiah(amount: bigint | number): string {
 export function toRupiahString(amount: bigint): string {
   return `Rp${Number(amount).toLocaleString('id-ID')}`;
 }
+
+/** Format rupiah tanpa float dan mendukung negatif: "-Rp1.250.000". */
+export function formatMoneyId(value: bigint | string): string {
+  const n = typeof value === 'bigint' ? value : BigInt(value);
+  const negative = n < 0n;
+  const digits = (negative ? -n : n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${negative ? '-' : ''}Rp${digits}`;
+}
