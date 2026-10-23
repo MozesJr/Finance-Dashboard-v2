@@ -48,6 +48,7 @@ describe('TransactionsService', () => {
       deleteDraftsByUser: jest.fn(),
       deleteExpiredDrafts: jest.fn(),
       findLastConfirmedBySource: jest.fn(),
+      isReceiptAvailable: jest.fn().mockResolvedValue(true),
     } as unknown as jest.Mocked<TransactionsRepository>;
     wallets = { getOwned: jest.fn() } as unknown as jest.Mocked<WalletsService>;
     categories = { getVisible: jest.fn() } as unknown as jest.Mocked<CategoriesService>;
@@ -219,6 +220,28 @@ describe('TransactionsService', () => {
       expect(repo.findPage.mock.calls[0][1].status).toBeUndefined();
       await service.list('u1', { limit: 20, status: 'DRAFT' } as never);
       expect(repo.findPage.mock.calls[1][1].status).toBe('DRAFT');
+    });
+  });
+
+  describe('lampiran struk', () => {
+    it('create dengan receiptId milik user → tersimpan; struk milik orang lain / sudah dipakai → 404', async () => {
+      repo.create.mockResolvedValue(row({ receiptId: 'r1' }) as never);
+      await service.create('u1', { type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000n, receiptId: 'r1' } as never);
+      expect(repo.isReceiptAvailable).toHaveBeenCalledWith('u1', 'r1');
+      expect(repo.create.mock.calls[0][1]).toMatchObject({ receiptId: 'r1' });
+
+      repo.isReceiptAvailable.mockResolvedValue(false);
+      repo.create.mockClear();
+      await expect(
+        service.create('u1', { type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000n, receiptId: 'r2' } as never),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('tanpa receiptId tidak memeriksa struk', async () => {
+      repo.create.mockResolvedValue(row() as never);
+      await service.create('u1', { type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000n } as never);
+      expect(repo.isReceiptAvailable).not.toHaveBeenCalled();
     });
   });
 });

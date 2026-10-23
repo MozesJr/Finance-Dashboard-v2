@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AllocationModule } from '../allocation/allocation.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { ReceiptsModule } from '../receipts/receipts.module';
 import { MerchantRulesModule } from '../merchant-rules/merchant-rules.module';
 import { SavingsModule } from '../savings/savings.module';
 import { TelegramLinkModule } from '../telegram-link/telegram-link.module';
@@ -14,6 +15,7 @@ import { BotCore } from './core/bot-core.service';
 import { LinkLockout } from './core/link-lockout';
 import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
 import { InputHandler } from './core/handlers/input.handler';
+import { ReceiptHandler } from './core/handlers/receipt.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
 import { DevBotController } from './dev/dev-bot.controller';
 import { BotJobsService } from './jobs/bot-jobs.service';
@@ -31,12 +33,14 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     SavingsModule,
     AllocationModule,
     TelegramLinkModule,
+    ReceiptsModule,
   ],
   controllers: [TelegramWebhookController, ...devControllers],
   providers: [
     BotCore,
     LinkLockout,
     InputHandler,
+    ReceiptHandler,
     DraftCallbackHandler,
     ReportsHandler,
     BotPendingRepository,

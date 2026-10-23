@@ -480,3 +480,14 @@ export function suggestCategoryId(
   }
   return null;
 }
+
+/** Cocokkan teks bebas (mis. "Debit BCA") dengan dompet user; null bila tidak ada atau ambigu. */
+export function matchWalletByText(text: string, wallets: ParserWallet[]): string | null {
+  const map = buildWalletTokenMap(wallets);
+  const hits = new Set<string>();
+  for (const token of normalizeText(text).split(' ')) {
+    const ids = map.get(token);
+    if (ids && ids.size === 1) hits.add([...ids][0]);
+  }
+  return hits.size === 1 ? [...hits][0] : null;
+}

@@ -4,6 +4,7 @@ import { getTodayInJakarta, toDateString } from 'shared';
 import { AiQuotaError, AiUnavailableError } from '../../ai/ai.errors';
 import { UsageMeter } from '../../ai/usage-meter';
 import { BotCore } from './bot-core.service';
+import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
 import { InputHandler } from './handlers/input.handler';
@@ -28,6 +29,7 @@ interface FakeTx {
   merchant: string | null;
   confirmedAt: number;
   aiConfidence: number | null;
+  receiptId: string | null;
 }
 
 const WALLETS = [
@@ -62,6 +64,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
       date: t.date,
       merchant: t.merchant,
       aiConfidence: t.aiConfidence,
+      receiptId: t.receiptId,
       categoryId: t.categoryId,
       walletId: t.walletId,
       toWalletId: t.toWalletId,
@@ -93,6 +96,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
         merchant: (input.merchant as string | null) ?? null,
         confirmedAt: 0,
         aiConfidence: (input.aiConfidence as number | null) ?? null,
+        receiptId: (input.receiptId as string | null) ?? null,
       };
       txs.push(t);
       return respond(t);
@@ -215,10 +219,24 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     ai as never,
     aiUsage as never,
   );
-  const callbacks = new DraftCallbackHandler(transactions as never, walletsService as never, categoriesService as never, rulesService as never, pending as never);
+  const receiptsSvc = {
+    parseUpload: jest.fn(async (): Promise<unknown> => {
+      throw new AiUnavailableError();
+    }),
+    getParsed: jest.fn(async (): Promise<unknown> => null),
+  };
+  const callbacks = new DraftCallbackHandler(
+    transactions as never,
+    walletsService as never,
+    categoriesService as never,
+    rulesService as never,
+    pending as never,
+    receiptsSvc as never,
+  );
+  const receiptHandler = new ReceiptHandler(receiptsSvc as never, transactions as never, walletsService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
   const lockout = new LinkLockout();
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -226,7 +244,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, ai, aiUsage, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, ai, aiUsage, receiptsSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -648,6 +666,125 @@ describe('BotCore', () => {
       const out = await bot.say('beli sesuatu sejuta lebih');
       expect(w.txs).toHaveLength(0);
       expect(out[0].text).toContain('Tidak bisa diproses');
+    });
+  });
+
+  describe('foto struk', () => {
+    const items = [
+      { name: 'Bread Butter Pudding', qty: 1, price: 11_500 },
+      { name: 'Cream Brulee', qty: 1, price: 14_000 },
+      { name: 'Choco Croissant', qty: 1, price: 10_500 },
+      { name: 'Bank Of Chocolat', qty: 1, price: 7_500 },
+      { name: 'Item 5', qty: 2, price: 1_000 },
+      { name: 'Item 6', qty: 1, price: 500 },
+    ];
+    const parsed = (over: Record<string, unknown> = {}) => ({
+      receiptId: 'r-1',
+      merchant: 'BreadTalk',
+      date: '2026-10-20',
+      total: '43500',
+      items,
+      paymentMethod: 'Debit BCA',
+      notes: [],
+      suggestedCategoryId: 'cat-expense-makan',
+      suggestedWalletId: 'w-bca',
+      imageUrl: '/api/receipts/r-1/image',
+      ...over,
+    });
+    const img = Buffer.from('fake-image');
+
+    it('foto → satu DRAFT EXPENSE dari struk (total, merchant, tanggal, kategori, dompet) + 3–5 item di preview', async () => {
+      const w = buildWorld();
+      w.receiptsSvc.parseUpload.mockResolvedValue(parsed());
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.sendPhoto(img);
+
+      expect(w.receiptsSvc.parseUpload).toHaveBeenCalledWith('u1', img);
+      expect(w.txs).toHaveLength(1);
+      expect(w.txs[0]).toMatchObject({ status: 'DRAFT', source: 'TELEGRAM', type: 'EXPENSE', amount: 43_500n, merchant: 'BreadTalk', date: '2026-10-20', categoryId: 'cat-expense-makan', walletId: 'w-bca', receiptId: 'r-1' });
+      expect(msg.text).toContain('Pengeluaran · Rp43.500');
+      expect(msg.text).toContain('🧾 Dari struk');
+      expect(msg.text).toContain('• Bread Butter Pudding Rp11.500');
+      expect(msg.text).toContain('• 2× Item 5 Rp1.000');
+      expect(msg.text).toContain('… +1 item lain');
+      expect(msg.text).not.toContain('Item 6');
+      expect(msg.text.split('\n').length).toBeLessThanOrEqual(14);
+      expect(msg.buttons.flat().map((b) => b.text)).toContain('✅ Simpan');
+    });
+
+    it('tidak pernah auto-confirm; Simpan baru mengonfirmasi, dan item tetap tampil setelah ganti kategori', async () => {
+      const w = buildWorld();
+      w.receiptsSvc.parseUpload.mockResolvedValue(parsed());
+      w.receiptsSvc.getParsed.mockResolvedValue({ receiptId: 'r-1', merchant: 'BreadTalk', items, notes: ['Catatan uji'] });
+      const bot = w.chat('c1', 'u1');
+      await bot.sendPhoto(img);
+      const id = w.txs[0].id;
+      expect(w.txs[0].status).toBe('DRAFT');
+
+      await bot.press(`c:${id}`);
+      await bot.press(bot.last.buttons.flat().find((b) => b.text.includes('Hiburan'))!.data);
+      expect(bot.last.text).toContain('Hiburan');
+      expect(bot.last.text).toContain('• Bread Butter Pudding Rp11.500');
+      expect(bot.last.text).toContain('ℹ️ Catatan uji');
+
+      await bot.press(`s:${id}`);
+      expect(w.txs[0].status).toBe('CONFIRMED');
+    });
+
+    it('dompet tidak dikenali & tanpa default → tanya dompet; draft dibuat dengan receiptId dan item tetap tampil', async () => {
+      const w = buildWorld();
+      w.receiptsSvc.parseUpload.mockResolvedValue(parsed({ suggestedWalletId: null, paymentMethod: 'QRIS' }));
+      w.receiptsSvc.getParsed.mockResolvedValue({ receiptId: 'r-1', items, notes: [] });
+      const bot = w.chat('c1', 'u1');
+      const [q] = await bot.sendPhoto(img);
+      expect(q.text).toContain('Pakai dompet mana?');
+      expect(w.txs).toHaveLength(0);
+
+      await bot.press(q.buttons[1][0].data);
+      expect(w.txs[0]).toMatchObject({ status: 'DRAFT', walletId: 'w-gopay', receiptId: 'r-1', amount: 43_500n });
+      expect(bot.last.text).toContain('• Bread Butter Pudding');
+    });
+
+    it('catatan sanity struk ditampilkan dan disimpan di catatan transaksi', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.receiptsSvc.parseUpload.mockResolvedValue(parsed({ notes: ['Jumlah item (50000) berbeda dari total (43500); memakai total struk.'] }));
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.sendPhoto(img);
+      expect(msg.text).toContain('ℹ️ Jumlah item');
+    });
+
+    it('gagal dibaca: pesan ramah per jenis error, tidak ada draft', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      const bot = w.chat('c1', 'u1');
+
+      w.receiptsSvc.parseUpload.mockRejectedValue(new AiUnavailableError());
+      expect((await bot.sendPhoto(img))[0].text).toContain('belum bisa dibaca');
+
+      w.receiptsSvc.parseUpload.mockRejectedValue(new AiQuotaError(30));
+      expect((await bot.sendPhoto(img))[0].text).toContain('30/hari');
+
+      w.receiptsSvc.parseUpload.mockRejectedValue(new BadRequestException('Total pada struk tidak terbaca. Coba foto yang lebih jelas atau catat manual.'));
+      expect((await bot.sendPhoto(img))[0].text).toContain('Total pada struk tidak terbaca');
+
+      w.receiptsSvc.parseUpload.mockRejectedValue(new Error('boom'));
+      expect((await bot.sendPhoto(img))[0].text).toContain('gagal diproses');
+      expect(w.txs).toHaveLength(0);
+    });
+
+    it('chat belum terhubung / user SUSPENDED → struk tidak diproses', async () => {
+      const w = buildWorld();
+      const stranger = w.chat('c9');
+      expect((await stranger.sendPhoto(img))[0].text).toContain('belum terhubung');
+      const suspended = w.chat('c8', 'u8', 'SUSPENDED');
+      expect((await suspended.sendPhoto(img))[0].text).toContain('ditangguhkan');
+      expect(w.receiptsSvc.parseUpload).not.toHaveBeenCalled();
+    });
+
+    it('belum punya dompet → arahkan ke web', async () => {
+      const w = buildWorld({ wallets: [] });
+      const bot = w.chat('c1', 'u1');
+      expect((await bot.sendPhoto(img))[0].text).toContain('belum punya dompet');
+      expect(w.receiptsSvc.parseUpload).not.toHaveBeenCalled();
     });
   });
 

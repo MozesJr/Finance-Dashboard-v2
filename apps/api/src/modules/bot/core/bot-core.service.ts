@@ -4,6 +4,7 @@ import { TransactionsService } from '../../transactions/transactions.service';
 import { BotPendingRepository } from '../bot-pending.repository';
 import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.handler';
 import { InputHandler } from './handlers/input.handler';
+import { ReceiptHandler } from './handlers/receipt.handler';
 import { ReportsHandler } from './handlers/reports.handler';
 import { summarizeTx } from './format';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
@@ -40,6 +41,7 @@ export class BotCore {
     private transactions: TransactionsService,
     private pending: BotPendingRepository,
     private lockout: LinkLockout,
+    private receiptHandler: ReceiptHandler,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -53,6 +55,7 @@ export class BotCore {
 
     try {
       if (input.kind === 'message') return await this.handleMessage(input, key);
+      if (input.kind === 'photo') return await this.handlePhoto(input);
       return await this.handleCallback(input);
     } catch (error) {
       this.logger.error(`Gagal memproses input bot: ${error instanceof Error ? error.message : 'unknown'}`);
@@ -163,6 +166,14 @@ export class BotCore {
     ]);
     const total = drafts + pending;
     return [send(total === 0 ? 'Tidak ada draft aktif.' : `🗑 ${total} draft dibuang.`)];
+  }
+
+  // ---------------------------------------------------------------- foto
+
+  private async handlePhoto(input: Extract<BotInput, { kind: 'photo' }>): Promise<BotReply[]> {
+    const gate = await this.authenticate(input);
+    if (!('userId' in gate)) return gate;
+    return this.receiptHandler.handle(gate, input.image);
   }
 
   // ---------------------------------------------------------------- callback

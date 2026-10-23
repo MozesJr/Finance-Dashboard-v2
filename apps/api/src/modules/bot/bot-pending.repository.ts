@@ -12,6 +12,9 @@ export interface PendingPayload {
   /** Terisi bila kategori/nominal ditebak AI. */
   aiConfidence?: number | null;
   note?: string | null;
+  receiptId?: string | null;
+  /** Baris tambahan pratinjau (mis. item struk). */
+  extraLines?: string[];
 }
 
 /** Input ter-parse yang menunggu pilihan dompet (belum bisa jadi draft). */

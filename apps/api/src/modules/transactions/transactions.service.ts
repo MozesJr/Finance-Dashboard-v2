@@ -48,6 +48,7 @@ export interface DraftInput {
   note?: string | null;
   /** Terisi bila ditebak AI (0..1). */
   aiConfidence?: number | null;
+  receiptId?: string | null;
 }
 
 export interface DraftPatch {
@@ -125,10 +126,12 @@ export class TransactionsService {
       note: input.note ?? null,
     };
     await this.validate(userId, data);
+    await this.assertReceiptUsable(userId, input.receiptId);
     const created = await this.repository.create(userId, {
       ...data,
       source: options.source ?? 'WEB',
       status: options.status ?? 'CONFIRMED',
+      receiptId: input.receiptId ?? null,
     });
     return toResponse(created);
   }
@@ -166,8 +169,15 @@ export class TransactionsService {
       note: input.note ?? null,
     };
     await this.validate(userId, data, undefined, { allowNoCategory: true });
+    await this.assertReceiptUsable(userId, input.receiptId);
     return toResponse(
-      await this.repository.create(userId, { ...data, source, status: 'DRAFT', aiConfidence: input.aiConfidence ?? null }),
+      await this.repository.create(userId, {
+        ...data,
+        source,
+        status: 'DRAFT',
+        aiConfidence: input.aiConfidence ?? null,
+        receiptId: input.receiptId ?? null,
+      }),
     );
   }
 
@@ -236,6 +246,12 @@ export class TransactionsService {
     await this.getOwned(userId, id);
     await this.assertNotSavingsTransfer(userId, id);
     await this.repository.delete(userId, id);
+  }
+
+  private async assertReceiptUsable(userId: string, receiptId: string | null | undefined): Promise<void> {
+    if (receiptId && !(await this.repository.isReceiptAvailable(userId, receiptId))) {
+      throw new NotFoundException('Struk tidak ditemukan atau sudah dipakai transaksi lain');
+    }
   }
 
   private async assertNotSavingsTransfer(userId: string, id: string): Promise<void> {

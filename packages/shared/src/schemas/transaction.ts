@@ -50,6 +50,8 @@ export const CreateTransactionSchema = z
     date: DateStringSchema.optional(),
     merchant: TextSchema.nullable().optional(),
     note: TextSchema.nullable().optional(),
+    /** Struk hasil unggahan (milik user) yang dilampirkan ke transaksi. */
+    receiptId: UuidSchema.nullable().optional(),
   })
   .superRefine((tx, ctx) => {
     const problem = checkTransactionShape(tx);

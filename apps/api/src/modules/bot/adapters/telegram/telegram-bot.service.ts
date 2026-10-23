@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { Bot, Context } from 'grammy';
 import { TelegramBotInfo } from '../../../telegram-link/telegram-bot-info';
 import { BOT_COMMANDS, BotCore } from '../../core/bot-core.service';
-import { BotReply, ChannelAdapter, IncomingCallback, IncomingMessage } from '../../core/types';
+import { BotReply, ChannelAdapter, IncomingCallback, IncomingMessage, IncomingPhoto } from '../../core/types';
+
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
 type TelegramMode = 'polling' | 'webhook';
 
@@ -116,6 +118,36 @@ export class TelegramBotService implements ChannelAdapter, OnModuleInit, OnModul
       await this.deliver(ctx, await this.core.handle(input), false);
     });
 
+    bot.on('message:photo', async (ctx) => {
+      if (ctx.chat.type !== 'private') {
+        await ctx.reply('Bot ini hanya melayani chat pribadi.');
+        return;
+      }
+      const photo = ctx.message.photo[ctx.message.photo.length - 1]; // resolusi terbesar
+      if ((photo.file_size ?? 0) > MAX_PHOTO_BYTES) {
+        await ctx.reply('Ukuran foto maksimal 10 MB.');
+        return;
+      }
+      const waiting = await ctx.reply('⏳ Membaca struk…');
+      try {
+        const image = await this.download(ctx, photo.file_id);
+        const input: IncomingPhoto = {
+          kind: 'photo',
+          channel: 'TELEGRAM',
+          chatId: String(ctx.chat.id),
+          isPrivate: true,
+          image,
+          username: ctx.from?.username ?? null,
+        };
+        await this.deliver(ctx, await this.core.handle(input), false);
+      } catch (error) {
+        this.logger.warn(`Foto gagal diproses: ${this.safe(error)}`);
+        await ctx.reply('Maaf, foto gagal diproses. Coba kirim lagi.');
+      } finally {
+        await ctx.api.deleteMessage(waiting.chat.id, waiting.message_id).catch(() => undefined);
+      }
+    });
+
     bot.on('callback_query:data', async (ctx) => {
       const chat = ctx.chat ?? ctx.callbackQuery.message?.chat;
       await ctx.answerCallbackQuery().catch(() => undefined);
@@ -132,6 +164,15 @@ export class TelegramBotService implements ChannelAdapter, OnModuleInit, OnModul
     });
 
     bot.catch((err) => this.logger.error(`Error handler Telegram: ${this.safe(err.error)}`));
+  }
+
+  /** Unduh berkas Telegram (URL memuat token: tidak pernah di-log). */
+  private async download(ctx: Context, fileId: string): Promise<Buffer> {
+    const file = await ctx.api.getFile(fileId);
+    if (!file.file_path || !this.token) throw new Error('berkas tidak tersedia');
+    const response = await fetch(`https://api.telegram.org/file/bot${this.token}/${file.file_path}`);
+    if (!response.ok) throw new Error(`unduh gagal (${response.status})`);
+    return Buffer.from(await response.arrayBuffer());
   }
 
   private async deliver(ctx: Context, replies: BotReply[], fromCallback: boolean): Promise<void> {

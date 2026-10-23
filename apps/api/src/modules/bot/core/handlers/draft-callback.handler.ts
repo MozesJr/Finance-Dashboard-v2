@@ -3,6 +3,7 @@ import { extractRuleKey, getTodayInJakarta, normalizeText, toDateString } from '
 import { CategoriesService } from '../../../categories/categories.service';
 import { MerchantRulesService } from '../../../merchant-rules/merchant-rules.service';
 import { TransactionResponse, TransactionsService } from '../../../transactions/transactions.service';
+import { ReceiptsService, receiptItemLines } from '../../../receipts/receipts.service';
 import { WalletsService } from '../../../wallets/wallets.service';
 import { BotPendingRepository } from '../../bot-pending.repository';
 import { formatDateId, renderDraft, summarizeTx } from '../format';
@@ -29,6 +30,7 @@ export class DraftCallbackHandler {
     private categories: CategoriesService,
     private rules: MerchantRulesService,
     private pending: BotPendingRepository,
+    private receipts: ReceiptsService,
   ) {}
 
   async handle(user: BotUser, data: string): Promise<BotReply[]> {
@@ -73,15 +75,23 @@ export class DraftCallbackHandler {
     return this.transactions.get(user.userId, id);
   }
 
-  private renderPreview(tx: TransactionResponse): BotReply {
-    const m = renderDraft(tx, this.today());
+  /** Baris tambahan pratinjau untuk draft dari struk (item & catatan). */
+  private async extraLines(user: BotUser, tx: TransactionResponse): Promise<string[]> {
+    if (!tx.receiptId) return [];
+    const parsed = await this.receipts.getParsed(user.userId, tx.receiptId);
+    if (!parsed) return ['🧾 Dari struk'];
+    return ['🧾 Dari struk', ...receiptItemLines(parsed.items), ...parsed.notes.map((n) => `ℹ️ ${n}`)];
+  }
+
+  private async renderPreview(user: BotUser, tx: TransactionResponse): Promise<BotReply> {
+    const m = renderDraft(tx, this.today(), await this.extraLines(user, tx));
     return edit(m.text, m.buttons);
   }
 
   private async preview(user: BotUser, id: string): Promise<BotReply[]> {
     const tx = await this.load(user, id);
     if (tx.status !== 'DRAFT') return [edit(`✅ Sudah tersimpan: ${summarizeTx(tx)}`)];
-    return [this.renderPreview(tx)];
+    return [await this.renderPreview(user, tx)];
   }
 
   private async save(user: BotUser, id: string): Promise<BotReply[]> {
@@ -96,7 +106,7 @@ export class DraftCallbackHandler {
       return [edit(`✅ Tersimpan: ${summarizeTx(saved)}\nBatalkan dengan /undo (dalam 24 jam).`)];
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
-      const m = renderDraft(tx, this.today());
+      const m = renderDraft(tx, this.today(), await this.extraLines(user, tx));
       return [edit(`⚠️ ${getErrorText(error)}\n\n${m.text}`, m.buttons)];
     }
   }
@@ -113,7 +123,7 @@ export class DraftCallbackHandler {
   private async categoryPicker(user: BotUser, id: string, heading = 'Pilih kategori:'): Promise<BotReply[]> {
     const tx = await this.load(user, id);
     if (tx.status !== 'DRAFT') return [edit(`✅ Sudah tersimpan: ${summarizeTx(tx)}`)];
-    if (tx.type === 'TRANSFER') return [this.renderPreview(tx)];
+    if (tx.type === 'TRANSFER') return [await this.renderPreview(user, tx)];
     const list = await this.categories.list(user.userId, tx.type as 'INCOME' | 'EXPENSE');
     const buttons: InlineButton[][] = [];
     list.forEach((c, idx) => {
@@ -143,7 +153,7 @@ export class DraftCallbackHandler {
         this.logger.warn(`Gagal menyimpan rule: ${getErrorText(error)}`);
       }
     }
-    return [this.renderPreview(updated)];
+    return [await this.renderPreview(user, updated)];
   }
 
   // ----- dompet
@@ -162,7 +172,7 @@ export class DraftCallbackHandler {
     const chosen = list[index];
     if (!chosen) return this.walletPicker(user, id);
     const updated = await this.transactions.updateDraft(user.userId, id, { walletId: chosen.id });
-    return [this.renderPreview(updated)];
+    return [await this.renderPreview(user, updated)];
   }
 
   // ----- tanggal
@@ -181,7 +191,7 @@ export class DraftCallbackHandler {
   private async pickDate(user: BotUser, id: string, offset: number): Promise<BotReply[]> {
     if (![0, 1, 2].includes(offset)) return this.datePicker(user, id);
     const updated = await this.transactions.updateDraft(user.userId, id, { date: addDays(this.today(), -offset) });
-    return [this.renderPreview(updated)];
+    return [await this.renderPreview(user, updated)];
   }
 
   // ----- dompet untuk input yang tertunda
@@ -204,11 +214,12 @@ export class DraftCallbackHandler {
         merchant: payload.description || null,
         note: payload.note ?? null,
         aiConfidence: payload.aiConfidence ?? null,
+        receiptId: payload.receiptId ?? null,
       },
       'TELEGRAM',
     );
     await this.pending.delete(user.userId, pendingId);
-    return [this.renderPreview(draft)];
+    return [await this.renderPreview(user, draft)];
   }
 
   // ----- undo

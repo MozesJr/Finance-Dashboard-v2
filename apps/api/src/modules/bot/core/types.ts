@@ -38,7 +38,13 @@ export interface IncomingCallback extends InputBase {
   data: string;
 }
 
-export type BotInput = IncomingMessage | IncomingCallback;
+export interface IncomingPhoto extends InputBase {
+  kind: 'photo';
+  /** Gambar yang sudah diunduh adapter. */
+  image: Buffer;
+}
+
+export type BotInput = IncomingMessage | IncomingCallback | IncomingPhoto;
 
 /** User yang sudah terautentikasi lewat link chat. */
 export interface BotUser {

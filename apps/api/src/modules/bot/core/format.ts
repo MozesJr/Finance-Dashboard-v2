@@ -31,7 +31,7 @@ const categoryLine = (tx: TransactionResponse) =>
   tx.category ? `${tx.category.icon ? `${tx.category.icon} ` : ''}${tx.category.name}` : '(belum dipilih)';
 
 /** Pesan pratinjau draft + tombol aksi. */
-export function renderDraft(tx: TransactionResponse, today: string): OutgoingMessage {
+export function renderDraft(tx: TransactionResponse, today: string, extraLines: string[] = []): OutgoingMessage {
   const type = tx.type as TxType;
   const lines = [
     '📝 Draft transaksi',
@@ -41,6 +41,7 @@ export function renderDraft(tx: TransactionResponse, today: string): OutgoingMes
   lines.push(type === 'TRANSFER' ? `👛 ${tx.wallet.name} → ${tx.toWallet?.name ?? '?'}` : `👛 ${tx.wallet.name}`);
   lines.push(`📅 ${formatDateId(tx.date)}${relativeDateLabel(tx.date, today)}`);
   if (tx.merchant) lines.push(`🗒 ${tx.merchant}`);
+  lines.push(...extraLines);
   if (tx.aiConfidence !== null && tx.aiConfidence !== undefined) {
     lines.push(`🤖 ditebak AI (yakin ${Math.round(tx.aiConfidence * 100)}%) — cek dulu ya`);
   }

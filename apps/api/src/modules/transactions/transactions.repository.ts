@@ -91,13 +91,19 @@ export class TransactionsRepository {
 
   async create(
     userId: string,
-    data: TransactionWriteData & { source: TxSource; status: TxStatus; aiConfidence?: number | null },
+    data: TransactionWriteData & { source: TxSource; status: TxStatus; aiConfidence?: number | null; receiptId?: string | null },
   ): Promise<TransactionWithRelations> {
     return this.prisma.transaction.create({ data: { ...data, userId }, include: TX_INCLUDE });
   }
 
   async update(userId: string, id: string, data: TransactionWriteData): Promise<void> {
     await this.prisma.transaction.updateMany({ where: { id, userId }, data });
+  }
+
+  /** Struk milik user dan belum dilampirkan ke transaksi lain. */
+  async isReceiptAvailable(userId: string, receiptId: string): Promise<boolean> {
+    const count = await this.prisma.receipt.count({ where: { id: receiptId, userId, transactions: { none: {} } } });
+    return count > 0;
   }
 
   async setStatus(userId: string, id: string, status: TxStatus): Promise<void> {

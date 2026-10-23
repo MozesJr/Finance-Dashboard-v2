@@ -37,6 +37,18 @@ export class FakeChannelAdapter implements ChannelAdapter {
     return this.apply(replies, null);
   }
 
+  /** Pengguna mengirim foto. */
+  async sendPhoto(image: Buffer): Promise<FakeMessage[]> {
+    const replies = await this.core.handle({
+      kind: 'photo',
+      channel: this.channel,
+      chatId: this.chatId,
+      isPrivate: this.isPrivate,
+      image,
+    });
+    return this.apply(replies, null);
+  }
+
   /** Pengguna menekan tombol berdata `data` (pada pesan terbaru yang memuatnya). */
   async press(data: string): Promise<FakeMessage[]> {
     const target = [...this.messages].reverse().find((m) => m.buttons.some((row) => row.some((b) => b.data === data))) ?? null;

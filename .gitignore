@@ -11,3 +11,6 @@ coverage
 .idea
 .DS_Store
 cookies.txt
+
+# Receipt images & OCR language data
+apps/api/storage/
