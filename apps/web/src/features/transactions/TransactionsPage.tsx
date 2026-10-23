@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PageHeader } from '@/components/PageHeader';
+import { ReceiptViewerDialog } from '@/features/receipts/components/ReceiptViewerDialog';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
 import { formatMoney } from '@/lib/money';
@@ -47,6 +48,7 @@ export function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({});
   const [form, setForm] = useState<FormState>(null);
   const [toDelete, setToDelete] = useState<TransactionDto | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
 
   // Pencarian teks di-debounce; filter lain langsung.
   const debouncedQ = useDebouncedValue(filters.q, 400);
@@ -77,6 +79,11 @@ export function TransactionsPage() {
 
   const rowActions = (tx: TransactionDto) => (
     <div className="flex">
+      {tx.receiptId && (
+        <Button variant="ghost" size="icon" aria-label="Lihat struk" onClick={() => setReceiptId(tx.receiptId)}>
+          <Receipt className="h-4 w-4" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" aria-label="Ubah transaksi" onClick={() => setForm({ mode: 'edit', transaction: tx })}>
         <Pencil className="h-4 w-4" />
       </Button>
@@ -210,6 +217,8 @@ export function TransactionsPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {receiptId && <ReceiptViewerDialog receiptId={receiptId} onClose={() => setReceiptId(null)} />}
 
       <ConfirmDialog
         open={toDelete !== null}

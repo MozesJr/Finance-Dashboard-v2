@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,6 +6,8 @@ import { CreateTransactionSchema, getTodayInJakarta, toDateString, TxType } from
 import { Button } from '@/components/ui/button';
 import { FieldError, Input, Label, Select } from '@/components/ui/input';
 import { useCategories } from '@/features/categories/hooks';
+import { ReceiptUpload } from '@/features/receipts/components/ReceiptUpload';
+import type { ReceiptParseDto } from '@/features/receipts/api';
 import { useWallets } from '@/features/wallets/hooks';
 import { getErrorMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
@@ -27,6 +29,7 @@ interface Props {
 
 export function TransactionForm({ transaction, submitting, error, onSubmit, onCancel }: Props) {
   const { data: wallets } = useWallets(true);
+  const [receipt, setReceipt] = useState<ReceiptParseDto | null>(null);
   const {
     register,
     handleSubmit,
@@ -61,6 +64,18 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
     (w) => !w.isArchived || w.id === transaction?.walletId || w.id === transaction?.toWalletId,
   );
 
+  /** Isi formulir dari struk; kategori & dompet hanya bila ada saran. */
+  const applyReceipt = (r: ReceiptParseDto) => {
+    setReceipt(r);
+    setValue('type', 'EXPENSE');
+    setValue('amount', r.total, { shouldDirty: true });
+    setValue('date', r.date, { shouldDirty: true });
+    setValue('merchant', r.merchant, { shouldDirty: true });
+    if (r.suggestedCategoryId) setValue('categoryId', r.suggestedCategoryId, { shouldDirty: true });
+    if (r.suggestedWalletId) setValue('walletId', r.suggestedWalletId, { shouldDirty: true });
+    setValue('note', r.notes.join(' ').slice(0, 200) || null);
+  };
+
   const submit = (data: FormOutput) =>
     onSubmit({
       type: data.type,
@@ -71,10 +86,13 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
       date: data.date,
       merchant: data.merchant || null,
       note: data.note || null,
+      ...(receipt ? { receiptId: receipt.receiptId } : {}),
     });
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
+      {!transaction && <ReceiptUpload onParsed={applyReceipt} attached={receipt} />}
+
       <div role="radiogroup" aria-label="Jenis transaksi" className="grid grid-cols-3 gap-1 rounded-md border border-line p-1">
         {(Object.keys(TX_TYPE_LABELS) as TxType[]).map((t) => (
           <label

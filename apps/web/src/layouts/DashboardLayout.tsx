@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, LayoutDashboard, Tags, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
+import { ArrowLeftRight, Sparkles, LayoutDashboard, Tags, LogOut, Wallet, Menu, PiggyBank, Settings, Users, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLogout } from '@/features/auth/hooks';
 import { useAdminStats } from '@/features/admin/hooks';
+import { AskAiDrawer } from '@/features/ai/AskAiDrawer';
 import { cn } from '@/lib/utils';
 
 interface MenuItem {
@@ -29,6 +30,7 @@ export function DashboardLayout() {
   const { mutate: logout } = useLogout();
   const { data: adminStats } = useAdminStats(user?.role === 'ADMIN');
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   // Drawer tertutup otomatis saat pindah halaman.
   const drawerOpen = drawerPath === location.pathname;
 
@@ -77,6 +79,16 @@ export function DashboardLayout() {
         ))}
       </nav>
       <div className="border-t border-line p-3">
+        <button
+          onClick={() => {
+            setDrawerPath(null);
+            setAiOpen(true);
+          }}
+          className="mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-primary transition-colors hover:bg-surface-2"
+        >
+          <Sparkles className="h-4 w-4" />
+          Tanya AI
+        </button>
         <p className="truncate px-3 pb-2 text-xs text-muted">{user?.email}</p>
         <button
           onClick={handleLogout}
@@ -110,6 +122,9 @@ export function DashboardLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <span className="font-semibold text-fg">Finance</span>
+          <button onClick={() => setAiOpen(true)} className="ml-auto rounded p-1 text-primary hover:text-fg" aria-label="Tanya AI">
+            <Sparkles className="h-5 w-5" />
+          </button>
         </header>
         <main className="flex-1 overflow-auto">
           <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
@@ -117,6 +132,7 @@ export function DashboardLayout() {
           </div>
         </main>
       </div>
+      <AskAiDrawer open={aiOpen} onOpenChange={setAiOpen} />
     </div>
   );
 }

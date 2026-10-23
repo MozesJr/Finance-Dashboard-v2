@@ -10,6 +10,8 @@ export interface TransactionDto {
   merchant: string | null;
   note: string | null;
   source: string;
+  receiptId: string | null;
+  aiConfidence: number | null;
   walletId: string;
   toWalletId: string | null;
   categoryId: string | null;
@@ -42,6 +44,8 @@ export interface TransactionPayload {
   date?: string;
   merchant?: string | null;
   note?: string | null;
+  /** Struk hasil unggahan yang dilampirkan. */
+  receiptId?: string | null;
 }
 
 const PAGE_SIZE = 20;
