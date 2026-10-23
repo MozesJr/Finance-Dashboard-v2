@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getCurrentMonthJakarta, getTodayInJakarta, toDateString } from 'shared';
+import { extractRupiahAmounts, getCurrentMonthJakarta, getTodayInJakarta, toDateString, validateNarrativeNumbers } from 'shared';
 import { AiUsageService } from '../ai/ai-usage.service';
 import { LlmClient, LlmMessage } from '../ai/llm-client.service';
 import { PromptService } from '../ai/prompt.service';
@@ -11,6 +11,7 @@ export const HISTORY_LIMIT = 50;
 export const STORED_MESSAGES_LIMIT = 200;
 const HISTORY_CHARS = 500;
 const MAX_TOOL_CALLS_PER_TURN = 4;
+const UNGROUNDED_REPLY = 'Maaf, aku belum bisa memastikan angkanya dari datamu. Coba tanyakan lebih spesifik, mis. "berapa saldo semua dompetku?" atau "berapa pengeluaranku bulan ini?"';
 const FALLBACK_REPLY = 'Maaf, aku belum bisa menjawab itu. Coba tanyakan dengan cara lain, mis. "berapa pengeluaranku bulan ini?"';
 
 export interface ChatAnswer {
@@ -57,19 +58,45 @@ export class AiChatService {
       ];
 
       const toolsUsed: string[] = [];
+      const toolResults: string[] = [];
       let final: string | undefined;
+      let forceTools = false;
+      let correctedOnce = false;
 
       for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-        const response = await this.llm.chat({ messages, tools: CHAT_TOOLS, temperature: 0.3, maxTokens: 800, meter });
+        const response = await this.llm.chat({
+          messages,
+          tools: CHAT_TOOLS,
+          toolChoice: forceTools ? 'required' : 'auto',
+          temperature: 0.3,
+          maxTokens: 800,
+          meter,
+        });
+        forceTools = false;
+
         if (response.toolCalls.length === 0) {
-          final = response.content;
+          // Jawaban tanpa dasar data: angka Rupiah harus berasal dari hasil tool giliran ini.
+          const ungrounded = this.ungroundedAmounts(response.content, toolResults);
+          if (ungrounded.length > 0 && !correctedOnce && i < MAX_TOOL_ITERATIONS - 1) {
+            correctedOnce = true;
+            forceTools = true;
+            this.logger.warn(`Jawaban chat memuat angka tanpa data tool (${ungrounded.length}); diminta memakai tool.`);
+            messages.push(
+              { role: 'assistant', content: response.content },
+              { role: 'user', content: `Jawabanmu menyebut angka yang tidak ada di data (${ungrounded.join(', ')}). Panggil tool yang sesuai untuk mengambil datanya, lalu jawab hanya dengan angka dari hasil tool.` },
+            );
+            continue;
+          }
+          final = ungrounded.length > 0 ? UNGROUNDED_REPLY : response.content;
           break;
         }
+
         const calls = response.toolCalls.slice(0, MAX_TOOL_CALLS_PER_TURN);
         messages.push({ role: 'assistant', content: response.content || null, toolCalls: calls });
         const results = await Promise.all(calls.map((c) => this.tools.execute(userId, c.name, c.arguments)));
         calls.forEach((call, idx) => {
           toolsUsed.push(call.name);
+          toolResults.push(results[idx]);
           messages.push({ role: 'tool', toolCallId: call.id, content: results[idx] });
         });
       }
@@ -77,13 +104,21 @@ export class AiChatService {
       if (final === undefined) {
         // Batas iterasi tercapai: minta jawaban akhir dari data yang sudah ada (tanpa tools).
         messages.push({ role: 'user', content: 'Jawab sekarang berdasarkan data yang sudah kamu peroleh. Jangan memanggil tool lagi.' });
-        final = (await this.llm.chat({ messages, temperature: 0.3, maxTokens: 800, meter })).content;
+        const last = (await this.llm.chat({ messages, temperature: 0.3, maxTokens: 800, meter })).content;
+        final = this.ungroundedAmounts(last, toolResults).length > 0 ? UNGROUNDED_REPLY : last;
       }
 
       const reply = toPlainText(final) || FALLBACK_REPLY;
       await this.persist(userId, message, reply);
       return { reply, toolsUsed };
     });
+  }
+
+  /** Nominal Rupiah di jawaban yang tidak ada di hasil tool giliran ini (dengan toleransi pembulatan). */
+  private ungroundedAmounts(reply: string, toolResults: string[]): string[] {
+    if (extractRupiahAmounts(reply).length === 0) return [];
+    const allowed = toolResults.flatMap((r) => extractRupiahAmounts(r).map((m) => m.value));
+    return validateNarrativeNumbers([reply], allowed).unknown;
   }
 
   history(userId: string) {

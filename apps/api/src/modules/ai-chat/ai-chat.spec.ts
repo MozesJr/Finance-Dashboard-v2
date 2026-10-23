@@ -107,7 +107,7 @@ describe('AiChatService', () => {
     const llm = { chat: jest.fn() };
     const prompts = { get: jest.fn().mockReturnValue('SYSTEM PROMPT') };
     const usage = { track: jest.fn(async (_u: string, _f: string, fn: (m: UsageMeter) => Promise<unknown>) => fn(new UsageMeter())) };
-    const tools = { execute: jest.fn().mockResolvedValue('{"ok":true}') };
+    const tools = { execute: jest.fn().mockResolvedValue('{"totalExpenseFormatted":"Rp1.287.500","ok":true}') };
     const repo = {
       recent: jest.fn().mockResolvedValue(history.map((h, i) => ({ id: `m${i}`, createdAt: new Date(), ...h }))),
       addExchange: jest.fn().mockResolvedValue(undefined),
@@ -132,7 +132,7 @@ describe('AiChatService', () => {
     expect(t.tools.execute).toHaveBeenCalledWith('u1', 'get_summary', '{"month":"2026-10"}');
     const secondCall = t.llm.chat.mock.calls[1][0].messages as LlmMessage[];
     expect(secondCall.at(-2)).toMatchObject({ role: 'assistant', toolCalls: [{ id: 't1', name: 'get_summary' }] });
-    expect(secondCall.at(-1)).toEqual({ role: 'tool', toolCallId: 't1', content: '{"ok":true}' });
+    expect(secondCall.at(-1)).toEqual({ role: 'tool', toolCallId: 't1', content: '{"totalExpenseFormatted":"Rp1.287.500","ok":true}' });
     expect(t.llm.chat.mock.calls[0][0].tools).toBe(CHAT_TOOLS);
     expect(t.repo.addExchange).toHaveBeenCalledWith('u1', 'berapa pengeluaran bulan ini?', 'Pengeluaranmu bulan Oktober 2026 Rp1.287.500.');
     expect(t.repo.prune).toHaveBeenCalledWith('u1', STORED_MESSAGES_LIMIT);
@@ -197,9 +197,59 @@ describe('AiChatService', () => {
     t.llm.chat.mockResolvedValue(final('   '));
     expect((await t.service.ask('u1', 'q')).reply).toContain('belum bisa menjawab');
 
-    t.llm.chat.mockResolvedValue(final('**Total** Rp1.000\n# Judul\n* poin satu'));
+    t.llm.chat.mockResolvedValue(final('**Total** tercatat\n# Judul\n* poin satu'));
     t.repo.addExchange.mockRejectedValue(new Error('db down'));
-    expect((await t.service.ask('u1', 'q')).reply).toBe('Total Rp1.000\nJudul\n- poin satu');
+    expect((await t.service.ask('u1', 'q')).reply).toBe('Total tercatat\nJudul\n- poin satu');
+  });
+
+  describe('grounding: angka harus dari hasil tool giliran ini', () => {
+    it('model menjawab angka tanpa memanggil tool (halusinasi) → dipaksa memakai tool (tool_choice required) lalu menjawab dari data', async () => {
+      const t = build();
+      t.llm.chat
+        .mockResolvedValueOnce(final('Saldo terbesar ada di BCA sebesar Rp1.450.000.')) // karangan
+        .mockResolvedValueOnce(withTools(call('t1', 'get_wallet_balances')))
+        .mockResolvedValueOnce(final('Saldo terbesarmu Rp1.287.500.'));
+      const res = await t.service.ask('u1', 'dompet apa saldo terbesar?');
+
+      expect(res.reply).toBe('Saldo terbesarmu Rp1.287.500.');
+      expect(res.toolsUsed).toEqual(['get_wallet_balances']);
+      expect(t.llm.chat.mock.calls[1][0].toolChoice).toBe('required');
+      const retryMessages = t.llm.chat.mock.calls[1][0].messages as LlmMessage[];
+      expect(retryMessages.some((m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('Rp1.450.000'))).toBe(true);
+      expect(t.repo.addExchange).toHaveBeenCalledWith('u1', 'dompet apa saldo terbesar?', 'Saldo terbesarmu Rp1.287.500.');
+    });
+
+    it('tetap mengarang setelah koreksi → jawaban aman tanpa angka karangan (tidak ada Rp1.450.000)', async () => {
+      const t = build();
+      t.llm.chat.mockResolvedValue(final('BCA punya Rp1.450.000.'));
+      const res = await t.service.ask('u1', 'saldo?');
+      expect(res.reply).toContain('belum bisa memastikan angkanya');
+      expect(res.reply).not.toContain('1.450.000');
+      expect(t.llm.chat).toHaveBeenCalledTimes(2);
+    });
+
+    it('angka dari history (percakapan lama) tidak dianggap data: harus dari tool giliran ini', async () => {
+      const t = build([{ role: 'ASSISTANT', content: 'Saldo BCA Rp1.450.000' }]);
+      t.llm.chat.mockResolvedValue(final('Saldomu masih Rp1.450.000.'));
+      expect((await t.service.ask('u1', 'masih sama?')).reply).toContain('belum bisa memastikan');
+    });
+
+    it('pembulatan wajar dari hasil tool diterima ("sekitar Rp1,3 juta"); jawaban tanpa angka & off-topic lolos', async () => {
+      const t = build();
+      t.llm.chat.mockResolvedValueOnce(withTools(call('t1', 'get_summary'))).mockResolvedValueOnce(final('Pengeluaranmu sekitar Rp1,3 juta.'));
+      expect((await t.service.ask('u1', 'q')).reply).toBe('Pengeluaranmu sekitar Rp1,3 juta.');
+
+      t.llm.chat.mockReset();
+      t.llm.chat.mockResolvedValue(final('Maaf, aku hanya bisa membantu soal keuanganmu.'));
+      expect((await t.service.ask('u1', 'siapa presiden?')).reply).toContain('hanya bisa membantu');
+      expect(t.llm.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('jawaban akhir setelah batas iterasi juga diperiksa', async () => {
+      const t = build();
+      t.llm.chat.mockImplementation(async (opts: { tools?: unknown }) => (opts.tools ? withTools(call(`t${t.llm.chat.mock.calls.length}`, 'get_summary')) : final('Totalnya Rp9.999.999.')));
+      expect((await t.service.ask('u1', 'q')).reply).toContain('belum bisa memastikan');
+    });
   });
 
   it('riwayat & hapus riwayat per user', async () => {

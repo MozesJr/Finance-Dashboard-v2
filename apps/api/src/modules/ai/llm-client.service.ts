@@ -39,6 +39,8 @@ export interface LlmCallOptions {
   temperature?: number;
   maxTokens?: number;
   tools?: ToolDefinition[];
+  /** 'required' memaksa model memanggil tool (didukung gateway); paksa-fungsi tertentu sengaja tidak disediakan. */
+  toolChoice?: 'auto' | 'required';
   jsonSchema?: Pick<AiSchema<unknown>, 'name' | 'json'>;
   /** Timpa model default (mis. RECEIPT_VISION_MODEL). */
   model?: string;
@@ -182,7 +184,7 @@ export class LlmClient {
         type: 'function' as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
       }));
-      params.tool_choice = 'auto'; // tool_choice paksa-fungsi lambat & tidak stabil di gateway ini
+      params.tool_choice = options.toolChoice ?? 'auto'; // paksa-fungsi tertentu lambat & tidak stabil di gateway ini
     }
     if (useJsonSchema && options.jsonSchema) {
       params.response_format = {
