@@ -107,6 +107,7 @@ model User {
   telegramLink         TelegramLink?
   telegramLinkCodes    TelegramLinkCode[]
   auditLogsAsAdmin     AuditLog[]             @relation("AdminAuditLogs")
+  BotPendingInput      BotPendingInput[]
 
   @@index([approvedById])
   @@map("users")
@@ -148,6 +149,7 @@ model Wallet {
   type           WalletType
   color          String?
   isArchived     Boolean    @default(false) @map("is_archived")
+  isDefault      Boolean    @default(false) @map("is_default")
   initialBalance BigInt     @default(0) @map("initial_balance")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
@@ -210,6 +212,7 @@ model Transaction {
   @@index([walletId])
   @@index([categoryId])
   @@index([userId, status, date])
+  @@index([status, createdAt])
   @@map("transactions")
 }
 
@@ -390,11 +393,25 @@ model AiInsight {
   @@map("ai_insights")
 }
 
+/// Input bot yang sudah ter-parse tetapi belum jadi draft (mis. dompet belum dipilih).
+model BotPendingInput {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("bot_pending_inputs")
+}
+
 model TelegramLink {
   id        String   @id @default(uuid())
   userId    String   @unique @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chatId    String   @unique @map("chat_id")
+  username  String?
   linkedAt  DateTime @default(now()) @map("linked_at")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -405,11 +422,12 @@ model TelegramLinkCode {
   id        String    @id @default(uuid())
   userId    String    @map("user_id")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String // 6 digit
+  codeHash  String    @map("code_hash") // HMAC-SHA256 dari kode 6 digit
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
+  @@index([codeHash])
   @@map("telegram_link_codes")
 }
