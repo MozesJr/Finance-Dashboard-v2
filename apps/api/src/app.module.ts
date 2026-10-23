@@ -15,6 +15,8 @@ import { SavingsModule } from './modules/savings/savings.module';
 import { AllocationModule } from './modules/allocation/allocation.module';
 import { MerchantRulesModule } from './modules/merchant-rules/merchant-rules.module';
 import { TelegramLinkModule } from './modules/telegram-link/telegram-link.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { BotModule } from './modules/bot/bot.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -41,6 +43,8 @@ import { PrismaModule } from './prisma.module';
     AllocationModule,
     MerchantRulesModule,
     TelegramLinkModule,
+    ScheduleModule.forRoot(),
+    BotModule,
   ],
   providers: [
     {
