@@ -8,6 +8,7 @@ export interface WalletDto {
   type: WalletType;
   color: string | null;
   isArchived: boolean;
+  isDefault: boolean;
   initialBalance: string;
   balance: string;
   createdAt: string;
@@ -20,6 +21,7 @@ export interface WalletPayload {
   initialBalance?: string;
   color?: string | null;
   isArchived?: boolean;
+  isDefault?: boolean;
 }
 
 export const walletsApi = {

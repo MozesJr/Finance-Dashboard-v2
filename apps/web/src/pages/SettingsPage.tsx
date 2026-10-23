@@ -1,8 +1,11 @@
+import { PageHeader } from '@/components/PageHeader';
+import { TelegramSettings } from '@/features/telegram/components/TelegramSettings';
+
 export function SettingsPage() {
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-white mb-2">Pengaturan</h1>
-      <p className="text-gray-400">Kelola pengaturan akun Anda di sini.</p>
+    <div className="space-y-6">
+      <PageHeader title="Pengaturan" subtitle="Kelola integrasi akunmu." />
+      <TelegramSettings />
     </div>
   );
 }

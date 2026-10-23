@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, ArchiveRestore, Banknote, Landmark, Pencil, Plus, Smartphone, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Banknote, Landmark, Pencil, Plus, Smartphone, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -41,6 +41,15 @@ export function WalletsPage() {
       { id: wallet.id, payload: { isArchived: !wallet.isArchived } },
       {
         onSuccess: () => toast.success(wallet.isArchived ? 'Dompet diaktifkan kembali' : 'Dompet diarsipkan'),
+        onError: (e) => toast.error(getErrorMessage(e)),
+      },
+    );
+
+  const makeDefault = (wallet: WalletDto) =>
+    update.mutate(
+      { id: wallet.id, payload: { isDefault: !wallet.isDefault } },
+      {
+        onSuccess: () => toast.success(wallet.isDefault ? 'Dompet default dicabut' : `${wallet.name} jadi dompet default`),
         onError: (e) => toast.error(getErrorMessage(e)),
       },
     );
@@ -106,6 +115,7 @@ export function WalletsPage() {
                     <p className="truncate font-medium text-fg">{w.name}</p>
                     <p className="text-xs text-muted">
                       {walletTypeLabel(w.type)}
+                      {w.isDefault && ' · Default'}
                       {w.isArchived && ' · Diarsipkan'}
                     </p>
                   </div>
@@ -117,6 +127,19 @@ export function WalletsPage() {
                   <Button variant="ghost" size="sm" onClick={() => setForm({ mode: 'edit', wallet: w })}>
                     <Pencil className="h-3 w-3" /> Ubah
                   </Button>
+                  {!w.isArchived && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => makeDefault(w)}
+                      disabled={update.isPending}
+                      aria-pressed={w.isDefault}
+                      title="Dompet default dipakai bot Telegram saat dompet tidak disebut"
+                    >
+                      <Star className={cn('h-3 w-3', w.isDefault && 'fill-warning text-warning')} />
+                      {w.isDefault ? 'Default' : 'Jadikan default'}
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => toggleArchive(w)} disabled={update.isPending}>
                     {w.isArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
                     {w.isArchived ? 'Aktifkan' : 'Arsipkan'}
