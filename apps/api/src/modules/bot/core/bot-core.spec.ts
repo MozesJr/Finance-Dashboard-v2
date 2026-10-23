@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { getTodayInJakarta, toDateString } from 'shared';
+import { AiQuotaError, AiUnavailableError } from '../../ai/ai.errors';
+import { UsageMeter } from '../../ai/usage-meter';
 import { BotCore } from './bot-core.service';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
@@ -25,6 +27,7 @@ interface FakeTx {
   categoryId: string | null;
   merchant: string | null;
   confirmedAt: number;
+  aiConfidence: number | null;
 }
 
 const WALLETS = [
@@ -58,6 +61,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
       source: t.source,
       date: t.date,
       merchant: t.merchant,
+      aiConfidence: t.aiConfidence,
       categoryId: t.categoryId,
       walletId: t.walletId,
       toWalletId: t.toWalletId,
@@ -88,6 +92,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
         categoryId: (input.categoryId as string | null) ?? null,
         merchant: (input.merchant as string | null) ?? null,
         confirmedAt: 0,
+        aiConfidence: (input.aiConfidence as number | null) ?? null,
       };
       txs.push(t);
       return respond(t);
@@ -194,7 +199,22 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     })),
   };
 
-  const inputHandler = new InputHandler(transactions as never, walletsService as never, categoriesService as never, rulesService as never, pending as never);
+  const ai = {
+    available: false,
+    parse: jest.fn(async (): Promise<unknown> => {
+      throw new AiUnavailableError();
+    }),
+  };
+  const aiUsage = { track: jest.fn(async (_u: string, _f: string, fn: (m: UsageMeter) => Promise<unknown>) => fn(new UsageMeter())) };
+  const inputHandler = new InputHandler(
+    transactions as never,
+    walletsService as never,
+    categoriesService as never,
+    rulesService as never,
+    pending as never,
+    ai as never,
+    aiUsage as never,
+  );
   const callbacks = new DraftCallbackHandler(transactions as never, walletsService as never, categoriesService as never, rulesService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
   const lockout = new LinkLockout();
@@ -206,7 +226,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, ai, aiUsage, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -503,6 +523,131 @@ describe('BotCore', () => {
       await b.say('kopi 18rb');
       expect(w.txs.find((t) => t.userId === 'u1')?.categoryId).toBe('cat-expense-hiburan');
       expect(w.txs.find((t) => t.userId === 'u2')?.categoryId).toBe('cat-expense-makan');
+    });
+  });
+
+  describe('fallback AI (teks bebas)', () => {
+    const aiResult = (over: Record<string, unknown> = {}) => ({
+      type: 'EXPENSE',
+      amount: 1_000_000n,
+      categoryId: 'cat-expense-transport',
+      walletId: null,
+      toWalletId: null,
+      date: null,
+      merchant: 'gojek',
+      note: null,
+      confidence: 0.8,
+      ...over,
+    });
+
+    it('parser aturan yakin → LLM TIDAK dipanggil', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      const bot = w.chat('c1', 'u1');
+      await bot.say('makan siang 35rb');
+      expect(w.ai.parse).not.toHaveBeenCalled();
+      expect(w.txs[0].aiConfidence).toBeNull();
+    });
+
+    it('nominal tak terbaca parser → LLM menebak → tetap DRAFT, berlabel "ditebak AI", aiConfidence tersimpan', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult());
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.say('bayar gojek sejuta');
+      expect(w.ai.parse).toHaveBeenCalledTimes(1);
+      expect(w.aiUsage.track).toHaveBeenCalledWith('u1', 'PARSE', expect.any(Function));
+      expect(w.txs[0]).toMatchObject({ status: 'DRAFT', type: 'EXPENSE', amount: 1_000_000n, categoryId: 'cat-expense-transport', walletId: 'w-bca', aiConfidence: 0.8 });
+      expect(msg.text).toContain('🤖 ditebak AI (yakin 80%)');
+      expect(msg.text).toContain('Rp1.000.000');
+    });
+
+    it('kategori tak dikenal tapi nominal ada → LLM hanya melengkapi kategori; nominal dari parser dipertahankan', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult({ amount: 999n, categoryId: 'cat-expense-hiburan', confidence: 0.6 }));
+      const bot = w.chat('c1', 'u1');
+      await bot.say('zara 50rb');
+      expect(w.txs[0]).toMatchObject({ amount: 50_000n, categoryId: 'cat-expense-hiburan', aiConfidence: 0.6, status: 'DRAFT' });
+    });
+
+    it('kategori dari AI dengan tipe tidak cocok diabaikan', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult({ type: 'INCOME', categoryId: 'cat-income-gaji' }));
+      const bot = w.chat('c1', 'u1');
+      await bot.say('zara 50rb'); // parser: EXPENSE
+      expect(w.txs[0].categoryId).toBeNull();
+      expect(w.txs[0].aiConfidence).toBeNull();
+    });
+
+    it('koreksi kategori pada draft AI → rule tersimpan; input serupa berikutnya tidak memanggil LLM lagi', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult({ categoryId: 'cat-expense-transport', merchant: 'zara' }));
+      const bot = w.chat('c1', 'u1');
+      await bot.say('zara 50rb');
+      const id = w.txs[0].id;
+      await bot.press(`c:${id}`);
+      await bot.press(bot.last.buttons.flat().find((b) => b.text.includes('Hiburan'))!.data);
+      expect(w.rules).toEqual([{ userId: 'u1', pattern: 'zara', categoryId: 'cat-expense-hiburan' }]);
+
+      w.ai.parse.mockClear();
+      await bot.say('zara 30rb');
+      expect(w.ai.parse).not.toHaveBeenCalled();
+      expect(w.txs[1].categoryId).toBe('cat-expense-hiburan');
+    });
+
+    it('LLM gagal/tidak tersedia: baris gagal tetap dijelaskan; draft tanpa kategori tetap dibuat', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true; // parse default melempar AiUnavailableError
+      const bot = w.chat('c1', 'u1');
+      const out = await bot.say('bayar gojek sejuta\nzara 50rb');
+      expect(w.txs).toHaveLength(1);
+      expect(w.txs[0].amount).toBe(50_000n);
+      expect(out[out.length - 1].text).toContain('AI sedang tidak tersedia');
+    });
+
+    it('LLM belum dikonfigurasi → tidak dipanggil dan tidak memakai kuota', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = false;
+      const bot = w.chat('c1', 'u1');
+      await bot.say('bayar gojek sejuta');
+      expect(w.ai.parse).not.toHaveBeenCalled();
+      expect(w.aiUsage.track).not.toHaveBeenCalled();
+    });
+
+    it('kuota habis → pesan jelas sekali, panggilan AI berikutnya dihentikan', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.aiUsage.track.mockRejectedValue(new AiQuotaError(50));
+      const bot = w.chat('c1', 'u1');
+      const out = await bot.say('zara 50rb\nuniqlo 70rb');
+      expect(w.aiUsage.track).toHaveBeenCalledTimes(1);
+      expect(w.txs).toHaveLength(2);
+      expect(out[out.length - 1].text).toContain('50/hari');
+    });
+
+    it('baris tanpa angka/kata bilangan tidak dikirim ke LLM; maks 3 panggilan per pesan', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult());
+      const bot = w.chat('c1', 'u1');
+      await bot.say('ngawur total');
+      expect(w.ai.parse).not.toHaveBeenCalled();
+
+      await bot.say('a sejuta\nb sejuta\nc sejuta\nd sejuta\ne sejuta');
+      expect(w.ai.parse).toHaveBeenCalledTimes(3);
+    });
+
+    it('AI tanpa nominal (amount null) → ditolak dengan pesan parser', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      w.ai.available = true;
+      w.ai.parse.mockResolvedValue(aiResult({ amount: null }));
+      const bot = w.chat('c1', 'u1');
+      const out = await bot.say('beli sesuatu sejuta lebih');
+      expect(w.txs).toHaveLength(0);
+      expect(out[0].text).toContain('Tidak bisa diproses');
     });
   });
 

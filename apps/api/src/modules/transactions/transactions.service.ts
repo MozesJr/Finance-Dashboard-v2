@@ -21,6 +21,7 @@ export interface TransactionResponse {
   note: string | null;
   source: string;
   receiptId: string | null;
+  aiConfidence: number | null;
   walletId: string;
   toWalletId: string | null;
   categoryId: string | null;
@@ -45,6 +46,8 @@ export interface DraftInput {
   date: string;
   merchant?: string | null;
   note?: string | null;
+  /** Terisi bila ditebak AI (0..1). */
+  aiConfidence?: number | null;
 }
 
 export interface DraftPatch {
@@ -163,7 +166,9 @@ export class TransactionsService {
       note: input.note ?? null,
     };
     await this.validate(userId, data, undefined, { allowNoCategory: true });
-    return toResponse(await this.repository.create(userId, { ...data, source, status: 'DRAFT' }));
+    return toResponse(
+      await this.repository.create(userId, { ...data, source, status: 'DRAFT', aiConfidence: input.aiConfidence ?? null }),
+    );
   }
 
   async updateDraft(userId: string, id: string, patch: DraftPatch): Promise<TransactionResponse> {
@@ -290,6 +295,7 @@ function toResponse(tx: TransactionWithRelations): TransactionResponse {
     note: tx.note,
     source: tx.source,
     receiptId: tx.receiptId,
+    aiConfidence: tx.aiConfidence,
     walletId: tx.walletId,
     toWalletId: tx.toWalletId,
     categoryId: tx.categoryId,

@@ -9,6 +9,9 @@ export interface PendingPayload {
   date: string;
   categoryId: string | null;
   description: string;
+  /** Terisi bila kategori/nominal ditebak AI. */
+  aiConfidence?: number | null;
+  note?: string | null;
 }
 
 /** Input ter-parse yang menunggu pilihan dompet (belum bisa jadi draft). */

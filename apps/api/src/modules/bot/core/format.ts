@@ -41,6 +41,9 @@ export function renderDraft(tx: TransactionResponse, today: string): OutgoingMes
   lines.push(type === 'TRANSFER' ? `👛 ${tx.wallet.name} → ${tx.toWallet?.name ?? '?'}` : `👛 ${tx.wallet.name}`);
   lines.push(`📅 ${formatDateId(tx.date)}${relativeDateLabel(tx.date, today)}`);
   if (tx.merchant) lines.push(`🗒 ${tx.merchant}`);
+  if (tx.aiConfidence !== null && tx.aiConfidence !== undefined) {
+    lines.push(`🤖 ditebak AI (yakin ${Math.round(tx.aiConfidence * 100)}%) — cek dulu ya`);
+  }
   lines.push('Tekan ✅ Simpan untuk mencatat.');
 
   const second: InlineButton[] = [];

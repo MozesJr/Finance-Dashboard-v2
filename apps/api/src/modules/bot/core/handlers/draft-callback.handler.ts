@@ -202,6 +202,8 @@ export class DraftCallbackHandler {
         amount: BigInt(payload.amount),
         date: payload.date,
         merchant: payload.description || null,
+        note: payload.note ?? null,
+        aiConfidence: payload.aiConfidence ?? null,
       },
       'TELEGRAM',
     );

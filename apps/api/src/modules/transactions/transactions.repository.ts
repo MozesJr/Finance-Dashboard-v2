@@ -91,7 +91,7 @@ export class TransactionsRepository {
 
   async create(
     userId: string,
-    data: TransactionWriteData & { source: TxSource; status: TxStatus },
+    data: TransactionWriteData & { source: TxSource; status: TxStatus; aiConfidence?: number | null },
   ): Promise<TransactionWithRelations> {
     return this.prisma.transaction.create({ data: { ...data, userId }, include: TX_INCLUDE });
   }
