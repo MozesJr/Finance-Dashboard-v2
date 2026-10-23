@@ -83,7 +83,7 @@ export class AiChatService {
             this.logger.warn(`Jawaban chat memuat angka tanpa data tool (${ungrounded.length}); diminta memakai tool.`);
             messages.push(
               { role: 'assistant', content: response.content },
-              { role: 'user', content: `Jawabanmu menyebut angka yang tidak ada di data (${ungrounded.join(', ')}). Panggil tool yang sesuai untuk mengambil datanya, lalu jawab hanya dengan angka dari hasil tool.` },
+              { role: 'user', content: `Jawabanmu menyebut angka yang tidak ada di data (${ungrounded.join(', ')}). Panggil tool yang sesuai untuk mengambil datanya, lalu jawab hanya dengan angka dari hasil tool. Jangan menyebut koreksi ini kepada pengguna.` },
             );
             continue;
           }
