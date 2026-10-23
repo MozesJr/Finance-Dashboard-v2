@@ -39,6 +39,13 @@ Dua menu utama: (1) Dashboard arus kas, (2) Tabungan (goals: dana darurat, inves
 - Commands: /start /link <kode> /saldo /hariini /bulanini /budget /undo /help
 - Parser nominal lokal ("35rb", "1,2jt", "1.250.000") dijalankan sebelum LLM.
 
+## Database & deploy
+
+- Database dev = produksi. Sebelum migrate dev WAJIB backup (`deploy/backup-dev.sh` atau pg_dump via tunnel); JANGAN pernah menyetujui reset database; migrasi destruktif harus ditampilkan dan disetujui eksplisit.
+- Artefak deploy ada di `deploy/` dan `docs/DEPLOY.md`. Claude TIDAK pernah ssh/menjalankan apa pun di server; user menjalankan runbook sendiri.
+- Produksi: project compose `dashboardfinance-v2`, container `dfv2-*`, hanya SATU instance api (bot Telegram polling per token).
+- `COOKIE_SECURE`, `TRUST_PROXY`, `APP_URL` mengatur cookie/CORS; default kode aman (Secure di production bila env tidak diset).
+
 ## Workflow
 
 - Kerjakan per fase, satu modul per sesi. Mulai dengan plan, tunggu persetujuan, baru implement.
