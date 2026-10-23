@@ -9,6 +9,7 @@ export const CreateWalletSchema = z.object({
   type: WalletTypeEnum,
   initialBalance: MoneyInputSchema.default(0),
   color: HexColorSchema.nullable().optional(),
+  isDefault: z.boolean().optional(),
 });
 
 export type CreateWalletInput = z.infer<typeof CreateWalletSchema>;
@@ -20,6 +21,7 @@ export const UpdateWalletSchema = z
     initialBalance: MoneyInputSchema,
     color: HexColorSchema.nullable(),
     isArchived: z.boolean(),
+    isDefault: z.boolean(),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, 'Minimal satu field harus diisi');
@@ -33,6 +35,7 @@ export const WalletSchema = z.object({
   type: WalletTypeEnum,
   color: z.string().nullable(),
   isArchived: z.boolean(),
+  isDefault: z.boolean(),
   initialBalance: z.string(),
   balance: z.string(),
   createdAt: z.date(),

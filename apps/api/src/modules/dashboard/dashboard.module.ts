@@ -8,5 +8,6 @@ import { WalletsModule } from '../wallets/wallets.module';
   imports: [WalletsModule],
   controllers: [DashboardController],
   providers: [DashboardService, DashboardRepository],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

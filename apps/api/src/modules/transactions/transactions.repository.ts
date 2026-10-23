@@ -14,6 +14,7 @@ export interface TransactionFilters {
   dateFrom?: Date;
   dateTo?: Date;
   type?: TxType;
+  status?: TxStatus;
   walletId?: string;
   categoryId?: string;
   q?: string;
@@ -69,7 +70,7 @@ export class TransactionsRepository {
     return this.prisma.transaction.findMany({
       where: {
         userId,
-        status: 'CONFIRMED',
+        status: filters.status ?? 'CONFIRMED',
         ...(filters.type ? { type: filters.type } : {}),
         ...(filters.walletId ? { OR: [{ walletId: filters.walletId }, { toWalletId: filters.walletId }] } : {}),
         ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
@@ -97,6 +98,29 @@ export class TransactionsRepository {
 
   async update(userId: string, id: string, data: TransactionWriteData): Promise<void> {
     await this.prisma.transaction.updateMany({ where: { id, userId }, data });
+  }
+
+  async setStatus(userId: string, id: string, status: TxStatus): Promise<void> {
+    await this.prisma.transaction.updateMany({ where: { id, userId }, data: { status } });
+  }
+
+  /** Transaksi CONFIRMED terakhir dari sumber tertentu (berdasarkan waktu terakhir diubah = dikonfirmasi). */
+  findLastConfirmedBySource(userId: string, source: TxSource, since: Date): Promise<TransactionWithRelations | null> {
+    return this.prisma.transaction.findFirst({
+      where: { userId, source, status: 'CONFIRMED', updatedAt: { gte: since } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      include: TX_INCLUDE,
+    });
+  }
+
+  async deleteDraftsByUser(userId: string, source: TxSource): Promise<number> {
+    const { count } = await this.prisma.transaction.deleteMany({ where: { userId, source, status: 'DRAFT' } });
+    return count;
+  }
+
+  async deleteExpiredDrafts(before: Date): Promise<number> {
+    const { count } = await this.prisma.transaction.deleteMany({ where: { status: 'DRAFT', createdAt: { lt: before } } });
+    return count;
   }
 
   /** Transfer yang dibuat dari kontribusi tabungan (dikelola dari halaman Tabungan). */

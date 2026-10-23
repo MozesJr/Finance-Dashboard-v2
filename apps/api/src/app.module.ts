@@ -13,6 +13,8 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { SavingsModule } from './modules/savings/savings.module';
 import { AllocationModule } from './modules/allocation/allocation.module';
+import { MerchantRulesModule } from './modules/merchant-rules/merchant-rules.module';
+import { TelegramLinkModule } from './modules/telegram-link/telegram-link.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -37,6 +39,8 @@ import { PrismaModule } from './prisma.module';
     DashboardModule,
     SavingsModule,
     AllocationModule,
+    MerchantRulesModule,
+    TelegramLinkModule,
   ],
   providers: [
     {

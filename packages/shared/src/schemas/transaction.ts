@@ -79,6 +79,8 @@ export const TransactionListQuerySchema = z
     dateFrom: DateStringSchema.optional(),
     dateTo: DateStringSchema.optional(),
     type: TxTypeEnum.optional(),
+    /** Default CONFIRMED; DRAFT hanya bila diminta eksplisit. */
+    status: TxStatusEnum.optional(),
     walletId: UuidSchema.optional(),
     categoryId: CategoryIdSchema.optional(),
     q: z.string().trim().min(1).max(100).optional(),

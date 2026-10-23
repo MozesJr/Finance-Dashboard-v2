@@ -35,6 +35,24 @@ export interface TransactionPage {
   nextCursor: string | null;
 }
 
+export interface DraftInput {
+  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  walletId: string;
+  toWalletId?: string | null;
+  categoryId?: string | null;
+  amount: bigint;
+  /** YYYY-MM-DD */
+  date: string;
+  merchant?: string | null;
+  note?: string | null;
+}
+
+export interface DraftPatch {
+  walletId?: string;
+  categoryId?: string | null;
+  date?: string;
+}
+
 export interface CreateOptions {
   source?: TxSource;
   status?: TxStatus;
@@ -72,6 +90,7 @@ export class TransactionsService {
         dateFrom: query.dateFrom ? toDate(query.dateFrom) : undefined,
         dateTo: query.dateTo ? toDate(query.dateTo) : undefined,
         type: query.type,
+        status: query.status,
         walletId: query.walletId,
         categoryId: query.categoryId,
         q: query.q,
@@ -129,6 +148,85 @@ export class TransactionsService {
     return this.get(userId, id);
   }
 
+  // ---------- Draft (bot) ----------
+
+  /** Draft boleh belum punya kategori; wajib terisi saat dikonfirmasi. */
+  async createDraft(userId: string, input: DraftInput, source: TxSource = 'TELEGRAM'): Promise<TransactionResponse> {
+    const data: TransactionWriteData = {
+      type: input.type,
+      walletId: input.walletId,
+      toWalletId: input.type === 'TRANSFER' ? (input.toWalletId ?? null) : null,
+      categoryId: input.type === 'TRANSFER' ? null : (input.categoryId ?? null),
+      amount: input.amount,
+      date: toDate(input.date),
+      merchant: input.merchant ?? null,
+      note: input.note ?? null,
+    };
+    await this.validate(userId, data, undefined, { allowNoCategory: true });
+    return toResponse(await this.repository.create(userId, { ...data, source, status: 'DRAFT' }));
+  }
+
+  async updateDraft(userId: string, id: string, patch: DraftPatch): Promise<TransactionResponse> {
+    const existing = await this.getOwned(userId, id);
+    if (existing.status !== 'DRAFT') throw new ConflictException('Transaksi ini sudah disimpan dan tidak bisa diubah dari draft.');
+    const merged: TransactionWriteData = {
+      type: existing.type,
+      walletId: patch.walletId ?? existing.walletId,
+      toWalletId: existing.toWalletId,
+      categoryId: patch.categoryId !== undefined ? patch.categoryId : existing.categoryId,
+      amount: existing.amount,
+      date: patch.date ? toDate(patch.date) : existing.date,
+      merchant: existing.merchant,
+      note: existing.note,
+    };
+    await this.validate(userId, merged, existing, { allowNoCategory: true });
+    await this.repository.update(userId, id, merged);
+    return this.get(userId, id);
+  }
+
+  /** Konfirmasi draft → CONFIRMED. Idempoten: draft yang sudah CONFIRMED dikembalikan apa adanya. */
+  async confirmDraft(userId: string, id: string): Promise<TransactionResponse> {
+    const existing = await this.getOwned(userId, id);
+    if (existing.status === 'CONFIRMED') return toResponse(existing);
+    await this.validate(
+      userId,
+      {
+        type: existing.type,
+        walletId: existing.walletId,
+        toWalletId: existing.toWalletId,
+        categoryId: existing.categoryId,
+        amount: existing.amount,
+        date: existing.date,
+        merchant: existing.merchant,
+        note: existing.note,
+      },
+      existing,
+    );
+    await this.repository.setStatus(userId, id, 'CONFIRMED');
+    return this.get(userId, id);
+  }
+
+  async discardDraft(userId: string, id: string): Promise<void> {
+    const existing = await this.getOwned(userId, id);
+    if (existing.status !== 'DRAFT') throw new ConflictException('Transaksi ini sudah disimpan, bukan draft.');
+    await this.repository.delete(userId, id);
+  }
+
+  discardDrafts(userId: string, source: TxSource = 'TELEGRAM'): Promise<number> {
+    return this.repository.deleteDraftsByUser(userId, source);
+  }
+
+  /** Transaksi CONFIRMED terakhir dari sumber tertentu dalam jendela waktu (untuk /undo). */
+  async findLastConfirmedFrom(userId: string, source: TxSource, withinMs: number): Promise<TransactionResponse | null> {
+    const found = await this.repository.findLastConfirmedBySource(userId, source, new Date(Date.now() - withinMs));
+    return found ? toResponse(found) : null;
+  }
+
+  /** Job: hapus draft yang lebih tua dari batas (semua user). */
+  deleteExpiredDrafts(before: Date): Promise<number> {
+    return this.repository.deleteExpiredDrafts(before);
+  }
+
   async remove(userId: string, id: string): Promise<void> {
     await this.getOwned(userId, id);
     await this.assertNotSavingsTransfer(userId, id);
@@ -156,9 +254,11 @@ export class TransactionsService {
     userId: string,
     data: TransactionWriteData,
     existing?: { walletId: string; toWalletId: string | null },
+    options: { allowNoCategory?: boolean } = {},
   ): Promise<void> {
     const problem = checkTransactionShape(data);
-    if (problem) throw new BadRequestException(problem.message);
+    const skippable = options.allowNoCategory && problem?.field === 'categoryId' && !data.categoryId;
+    if (problem && !skippable) throw new BadRequestException(problem.message);
     if (data.amount <= 0n) throw new BadRequestException('Nominal harus lebih dari 0');
 
     const walletIds = [data.walletId, ...(data.toWalletId ? [data.toWalletId] : [])];

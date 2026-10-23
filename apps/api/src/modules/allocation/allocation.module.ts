@@ -8,5 +8,6 @@ import { SavingsModule } from '../savings/savings.module';
   imports: [SavingsModule],
   controllers: [AllocationController],
   providers: [AllocationService, AllocationRepository],
+  exports: [AllocationService],
 })
 export class AllocationModule {}

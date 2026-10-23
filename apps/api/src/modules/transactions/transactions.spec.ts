@@ -44,6 +44,10 @@ describe('TransactionsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
       hasSavingsContribution: jest.fn().mockResolvedValue(false),
+      setStatus: jest.fn(),
+      deleteDraftsByUser: jest.fn(),
+      deleteExpiredDrafts: jest.fn(),
+      findLastConfirmedBySource: jest.fn(),
     } as unknown as jest.Mocked<TransactionsRepository>;
     wallets = { getOwned: jest.fn() } as unknown as jest.Mocked<WalletsService>;
     categories = { getVisible: jest.fn() } as unknown as jest.Mocked<CategoriesService>;
@@ -148,5 +152,73 @@ describe('TransactionsService', () => {
     const c = encodeCursor({ date: new Date('2026-10-20T00:00:00Z'), createdAt: now, id: 't9' });
     expect(decodeCursor(c)).toEqual({ date: new Date('2026-10-20T00:00:00Z'), createdAt: now, id: 't9' });
     expect(() => decodeCursor('@@@')).toThrow(BadRequestException);
+  });
+
+  describe('draft (bot)', () => {
+    it('createDraft: boleh tanpa kategori, status DRAFT, source TELEGRAM', async () => {
+      repo.create.mockResolvedValue(row({ status: 'DRAFT', source: 'TELEGRAM', categoryId: null, category: null }) as never);
+      const res = await service.createDraft('u1', { type: 'EXPENSE', walletId: W1, amount: 35_000n, date: '2026-10-23', merchant: 'makan siang' });
+      expect(repo.create).toHaveBeenCalledWith('u1', expect.objectContaining({ status: 'DRAFT', source: 'TELEGRAM', categoryId: null, merchant: 'makan siang' }));
+      expect(res.status).toBe('DRAFT');
+    });
+
+    it('createDraft: wallet milik user lain → 404, tipe kategori salah → 400', async () => {
+      wallets.getOwned.mockRejectedValueOnce(new NotFoundException('Wallet tidak ditemukan'));
+      await expect(service.createDraft('u1', { type: 'EXPENSE', walletId: W1, amount: 1n, date: '2026-10-23' })).rejects.toBeInstanceOf(NotFoundException);
+      categories.getVisible.mockResolvedValue({ id: 'cat-income-gaji', type: 'INCOME' } as never);
+      await expect(
+        service.createDraft('u1', { type: 'EXPENSE', walletId: W1, categoryId: 'cat-income-gaji', amount: 1n, date: '2026-10-23' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('confirmDraft: tanpa kategori ditolak (400); lengkap → CONFIRMED', async () => {
+      repo.findById.mockResolvedValue(row({ status: 'DRAFT', categoryId: null, category: null }) as never);
+      await expect(service.confirmDraft('u1', 't1')).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.setStatus).not.toHaveBeenCalled();
+
+      repo.findById.mockResolvedValue(row({ status: 'DRAFT' }) as never);
+      await service.confirmDraft('u1', 't1');
+      expect(repo.setStatus).toHaveBeenCalledWith('u1', 't1', 'CONFIRMED');
+    });
+
+    it('confirmDraft idempoten bila sudah CONFIRMED; draft user lain → 404', async () => {
+      repo.findById.mockResolvedValue(row({ status: 'CONFIRMED' }) as never);
+      const res = await service.confirmDraft('u1', 't1');
+      expect(res.status).toBe('CONFIRMED');
+      expect(repo.setStatus).not.toHaveBeenCalled();
+
+      repo.findById.mockResolvedValue(null);
+      await expect(service.confirmDraft('u1', 'x')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('updateDraft hanya untuk DRAFT (409 bila sudah disimpan)', async () => {
+      repo.findById.mockResolvedValue(row({ status: 'CONFIRMED' }) as never);
+      await expect(service.updateDraft('u1', 't1', { categoryId: 'cat-expense-makan' })).rejects.toBeInstanceOf(ConflictException);
+
+      repo.findById.mockResolvedValue(row({ status: 'DRAFT', categoryId: null, category: null }) as never);
+      await service.updateDraft('u1', 't1', { categoryId: 'cat-expense-makan' });
+      expect(repo.update).toHaveBeenCalledWith('u1', 't1', expect.objectContaining({ categoryId: 'cat-expense-makan' }));
+    });
+
+    it('discardDraft hanya DRAFT; deleteExpiredDrafts & discardDrafts meneruskan ke repository', async () => {
+      repo.findById.mockResolvedValue(row({ status: 'CONFIRMED' }) as never);
+      await expect(service.discardDraft('u1', 't1')).rejects.toBeInstanceOf(ConflictException);
+      repo.findById.mockResolvedValue(row({ status: 'DRAFT' }) as never);
+      await service.discardDraft('u1', 't1');
+      expect(repo.delete).toHaveBeenCalledWith('u1', 't1');
+
+      repo.deleteExpiredDrafts.mockResolvedValue(3);
+      const cutoff = new Date('2026-10-22T00:00:00Z');
+      expect(await service.deleteExpiredDrafts(cutoff)).toBe(3);
+      expect(repo.deleteExpiredDrafts).toHaveBeenCalledWith(cutoff);
+    });
+
+    it('list tanpa status → repository menerima undefined (default CONFIRMED diterapkan di repository); status=DRAFT diteruskan', async () => {
+      repo.findPage.mockResolvedValue([] as never);
+      await service.list('u1', { limit: 20 } as never);
+      expect(repo.findPage.mock.calls[0][1].status).toBeUndefined();
+      await service.list('u1', { limit: 20, status: 'DRAFT' } as never);
+      expect(repo.findPage.mock.calls[1][1].status).toBe('DRAFT');
+    });
   });
 });

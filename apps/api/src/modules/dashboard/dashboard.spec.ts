@@ -110,4 +110,27 @@ describe('DashboardService', () => {
       jest.useRealTimers();
     }
   });
+
+  it('period: total, net, dan 3 kategori pengeluaran terbesar dengan persen', async () => {
+    repo.sumByType.mockResolvedValue({ income: 1_000_000n, expense: 400_000n });
+    repo.totalsByCategory.mockResolvedValue([
+      { categoryId: 'a', total: 50_000n, count: 1 },
+      { categoryId: 'b', total: 200_000n, count: 2 },
+      { categoryId: 'c', total: 100_000n, count: 1 },
+      { categoryId: 'd', total: 50_000n, count: 1 },
+    ]);
+    repo.findCategories.mockResolvedValue([
+      { id: 'b', name: 'Makan', color: null, icon: '🍽️' },
+      { id: 'c', name: 'Transport', color: null, icon: null },
+      { id: 'a', name: 'Lain', color: null, icon: null },
+    ]);
+    const r = await service.period('u1', new Date('2026-10-23T00:00:00Z'), new Date('2026-10-24T00:00:00Z'));
+    expect(r).toMatchObject({ totalIncome: '1000000', totalExpense: '400000', net: '600000' });
+    expect(r.topExpenseCategories.map((c) => [c.name, c.total, c.percent])).toEqual([
+      ['Makan', '200000', 50],
+      ['Transport', '100000', 25],
+      ['Lain', '50000', 12.5],
+    ]);
+    expect(repo.sumByType.mock.calls[0][0]).toBe('u1');
+  });
 });

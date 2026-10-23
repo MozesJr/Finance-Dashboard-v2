@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { WalletsService } from './wallets.service';
 import { WalletsRepository } from './wallets.repository';
 
@@ -10,6 +10,7 @@ const wallet = (id: string, initialBalance: bigint, isArchived = false) => ({
   type: 'BANK',
   color: null,
   isArchived,
+  isDefault: false,
   initialBalance,
   createdAt: now,
   updatedAt: now,
@@ -28,6 +29,8 @@ describe('WalletsService', () => {
       delete: jest.fn(),
       hasTransactions: jest.fn(),
       getBalanceDeltas: jest.fn(),
+      setDefault: jest.fn(),
+      findDefault: jest.fn(),
     } as unknown as jest.Mocked<WalletsRepository>;
     service = new WalletsService(repo);
   });
@@ -82,5 +85,39 @@ describe('WalletsService', () => {
     repo.create.mockResolvedValue(wallet('a', 0n) as never);
     const res = await service.create('u1', { name: 'a', type: 'BANK', initialBalance: 0n });
     expect(res).not.toHaveProperty('userId');
+  });
+
+  describe('dompet default', () => {
+    it('menjadikan default lewat repository.setDefault (atomik), dompet lain dicabut di sana', async () => {
+      repo.findById.mockResolvedValue(wallet('a', 0n) as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map());
+      await service.update('u1', 'a', { isDefault: true });
+      expect(repo.setDefault).toHaveBeenCalledWith('u1', 'a');
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('dompet diarsipkan tidak bisa jadi default (400)', async () => {
+      repo.findById.mockResolvedValue(wallet('a', 0n, true) as never);
+      await expect(service.update('u1', 'a', { isDefault: true })).rejects.toBeInstanceOf(BadRequestException);
+      repo.findById.mockResolvedValue(wallet('b', 0n) as never);
+      await expect(service.update('u1', 'b', { isDefault: true, isArchived: true })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.setDefault).not.toHaveBeenCalled();
+    });
+
+    it('mengarsipkan dompet default mencabut status defaultnya', async () => {
+      repo.findById.mockResolvedValue({ ...wallet('a', 0n), isDefault: true } as never);
+      repo.update.mockResolvedValue(wallet('a', 0n, true) as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map());
+      await service.update('u1', 'a', { isArchived: true });
+      expect(repo.update).toHaveBeenCalledWith('u1', 'a', { isArchived: true, isDefault: false });
+    });
+
+    it('create dengan isDefault memanggil setDefault', async () => {
+      repo.create.mockResolvedValue(wallet('a', 0n) as never);
+      repo.findById.mockResolvedValue(wallet('a', 0n) as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map());
+      await service.create('u1', { name: 'a', type: 'BANK', initialBalance: 0n, isDefault: true });
+      expect(repo.setDefault).toHaveBeenCalledWith('u1', 'a');
+    });
   });
 });

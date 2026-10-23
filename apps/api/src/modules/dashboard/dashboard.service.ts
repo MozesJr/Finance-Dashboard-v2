@@ -37,6 +37,13 @@ export interface ByCategoryResponse {
   items: ByCategoryItem[];
 }
 
+export interface PeriodReport {
+  totalIncome: string;
+  totalExpense: string;
+  net: string;
+  topExpenseCategories: Array<{ name: string; icon: string | null; total: string; percent: number }>;
+}
+
 export interface TrendItem {
   month: string;
   income: string;
@@ -118,6 +125,31 @@ export class DashboardService {
       });
 
     return { month, type: query.type, total: grand.toString(), items };
+  }
+
+  /** Ringkasan rentang tanggal arbitrer (hari ini, bulan ini, ...) + 3 kategori pengeluaran terbesar. */
+  async period(userId: string, start: Date, endExclusive: Date, topN = 3): Promise<PeriodReport> {
+    const [sums, totals] = await Promise.all([
+      this.repository.sumByType(userId, start, endExclusive),
+      this.repository.totalsByCategory(userId, 'EXPENSE', start, endExclusive),
+    ]);
+    const sorted = [...totals].sort((a, b) => (b.total > a.total ? 1 : b.total < a.total ? -1 : 0)).slice(0, topN);
+    const infos = await this.repository.findCategories(sorted.map((t) => t.categoryId).filter((id): id is string => id !== null));
+    const byId = new Map(infos.map((c) => [c.id, c]));
+    return {
+      totalIncome: sums.income.toString(),
+      totalExpense: sums.expense.toString(),
+      net: (sums.income - sums.expense).toString(),
+      topExpenseCategories: sorted.map((t) => {
+        const info = t.categoryId ? byId.get(t.categoryId) : undefined;
+        return {
+          name: info?.name ?? 'Tanpa kategori',
+          icon: info?.icon ?? null,
+          total: t.total.toString(),
+          percent: percentOf(t.total, sums.expense),
+        };
+      }),
+    };
   }
 
   async trend(userId: string, query: DashboardTrendQuery): Promise<{ months: TrendItem[] }> {

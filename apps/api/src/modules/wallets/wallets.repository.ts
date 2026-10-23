@@ -26,6 +26,18 @@ export class WalletsRepository {
     return count === 0 ? null : this.findById(userId, id);
   }
 
+  findDefault(userId: string): Promise<Wallet | null> {
+    return this.prisma.wallet.findFirst({ where: { userId, isDefault: true, isArchived: false } });
+  }
+
+  /** Jadikan satu dompet default dan cabut status default dompet lain (atomik). */
+  async setDefault(userId: string, id: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.wallet.updateMany({ where: { userId, isDefault: true, NOT: { id } }, data: { isDefault: false } }),
+      this.prisma.wallet.updateMany({ where: { userId, id }, data: { isDefault: true } }),
+    ]);
+  }
+
   async delete(userId: string, id: string): Promise<boolean> {
     const { count } = await this.prisma.wallet.deleteMany({ where: { id, userId } });
     return count > 0;
