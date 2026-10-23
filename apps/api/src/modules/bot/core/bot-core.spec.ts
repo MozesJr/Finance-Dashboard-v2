@@ -4,6 +4,7 @@ import { getTodayInJakarta, toDateString } from 'shared';
 import { AiQuotaError, AiUnavailableError } from '../../ai/ai.errors';
 import { UsageMeter } from '../../ai/usage-meter';
 import { BotCore } from './bot-core.service';
+import { ChatHandler } from './handlers/chat.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
@@ -233,10 +234,12 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     pending as never,
     receiptsSvc as never,
   );
+  const chatSvc = { ask: jest.fn(async (): Promise<unknown> => ({ reply: 'jawaban AI', toolsUsed: [] })) };
+  const chatHandler = new ChatHandler(chatSvc as never);
   const receiptHandler = new ReceiptHandler(receiptsSvc as never, transactions as never, walletsService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
   const lockout = new LinkLockout();
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -244,7 +247,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, ai, aiUsage, receiptsSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, ai, aiUsage, receiptsSvc, chatSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -785,6 +788,73 @@ describe('BotCore', () => {
       const bot = w.chat('c1', 'u1');
       expect((await bot.sendPhoto(img))[0].text).toContain('belum punya dompet');
       expect(w.receiptsSvc.parseUpload).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('chat AI (/tanya & pertanyaan)', () => {
+    it('/tanya <pertanyaan> → ChatService dengan userId dari chat tertaut; jawaban dikirim apa adanya', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.say('/tanya berapa pengeluaranku bulan ini?');
+      expect(w.chatSvc.ask).toHaveBeenCalledWith('u1', 'berapa pengeluaranku bulan ini?');
+      expect(msg.text).toBe('jawaban AI');
+      expect(w.txs).toHaveLength(0);
+    });
+
+    it('/tanya tanpa isi → petunjuk, AI tidak dipanggil', async () => {
+      const w = buildWorld();
+      const bot = w.chat('c1', 'u1');
+      expect((await bot.say('/tanya'))[0].text).toContain('Tulis pertanyaannya');
+      expect(w.chatSvc.ask).not.toHaveBeenCalled();
+    });
+
+    it.each(['berapa pengeluaran saya bulan ini', 'kapan terakhir saya beli bensin?', 'gimana kondisi tabungan', 'piye saldo ku', 'pinten pengeluaran minggu iki'])(
+      'pertanyaan tanpa nominal diarahkan ke chat, bukan parser: %s',
+      async (q) => {
+        const w = buildWorld({ defaultWallet: 'w-bca' });
+        const bot = w.chat('c1', 'u1');
+        await bot.say(q);
+        expect(w.chatSvc.ask).toHaveBeenCalledWith('u1', q);
+        expect(w.txs).toHaveLength(0);
+        expect(w.ai.parse).not.toHaveBeenCalled();
+      },
+    );
+
+    it('angka polos (tahun) tidak mengubah arah; nominal tegas tetap transaksi', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      const bot = w.chat('c1', 'u1');
+      await bot.say('berapa pengeluaran bulan oktober 2026?');
+      expect(w.chatSvc.ask).toHaveBeenCalledTimes(1);
+
+      await bot.say('apa ini beli kopi 35rb');
+      expect(w.chatSvc.ask).toHaveBeenCalledTimes(1);
+      expect(w.txs).toHaveLength(1);
+      expect(w.txs[0].amount).toBe(35_000n);
+    });
+
+    it('error: kuota, AI mati, parse gagal, error tak terduga → pesan ramah berbeda', async () => {
+      const w = buildWorld();
+      const bot = w.chat('c1', 'u1');
+      w.chatSvc.ask.mockRejectedValue(new AiQuotaError(30));
+      expect((await bot.say('/tanya halo'))[0].text).toContain('30/hari');
+      w.chatSvc.ask.mockRejectedValue(new AiUnavailableError());
+      expect((await bot.say('/tanya halo'))[0].text).toContain('/saldo');
+      w.chatSvc.ask.mockRejectedValue(new Error('boom'));
+      expect((await bot.say('/tanya halo'))[0].text).toContain('gagal diproses');
+    });
+
+    it('chat belum terhubung / SUSPENDED → AI tidak dipanggil', async () => {
+      const w = buildWorld();
+      expect((await w.chat('c9').say('/tanya halo'))[0].text).toContain('belum terhubung');
+      expect((await w.chat('c8', 'u8', 'SUSPENDED').say('berapa saldo saya?'))[0].text).toContain('ditangguhkan');
+      expect(w.chatSvc.ask).not.toHaveBeenCalled();
+    });
+
+    it('jawaban sangat panjang dipotong agar muat di pesan Telegram', async () => {
+      const w = buildWorld();
+      w.chatSvc.ask.mockResolvedValue({ reply: 'x'.repeat(10_000), toolsUsed: [] });
+      const bot = w.chat('c1', 'u1');
+      expect((await bot.say('/tanya panjang'))[0].text.length).toBeLessThanOrEqual(3801);
     });
   });
 

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AllocationModule } from '../allocation/allocation.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { AiChatModule } from '../ai-chat/ai-chat.module';
 import { ReceiptsModule } from '../receipts/receipts.module';
 import { MerchantRulesModule } from '../merchant-rules/merchant-rules.module';
 import { SavingsModule } from '../savings/savings.module';
@@ -14,6 +15,7 @@ import { BotPendingRepository } from './bot-pending.repository';
 import { BotCore } from './core/bot-core.service';
 import { LinkLockout } from './core/link-lockout';
 import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
+import { ChatHandler } from './core/handlers/chat.handler';
 import { InputHandler } from './core/handlers/input.handler';
 import { ReceiptHandler } from './core/handlers/receipt.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
@@ -34,6 +36,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     AllocationModule,
     TelegramLinkModule,
     ReceiptsModule,
+    AiChatModule,
   ],
   controllers: [TelegramWebhookController, ...devControllers],
   providers: [
@@ -41,6 +44,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     LinkLockout,
     InputHandler,
     ReceiptHandler,
+    ChatHandler,
     DraftCallbackHandler,
     ReportsHandler,
     BotPendingRepository,

@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { shouldRouteToChat } from 'shared';
 import { TelegramLinkService } from '../../telegram-link/telegram-link.service';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { BotPendingRepository } from '../bot-pending.repository';
 import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.handler';
+import { ChatHandler } from './handlers/chat.handler';
 import { InputHandler } from './handlers/input.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { ReportsHandler } from './handlers/reports.handler';
@@ -18,6 +20,7 @@ export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'bulanini', description: 'Ringkasan bulan ini' },
   { command: 'alokasi', description: 'Status alokasi gaji bulan ini' },
   { command: 'tabungan', description: 'Progress goal tabungan' },
+  { command: 'tanya', description: 'Tanya AI soal keuanganmu: /tanya <pertanyaan>' },
   { command: 'undo', description: 'Batalkan transaksi terakhir dari bot' },
   { command: 'batal', description: 'Buang draft yang belum disimpan' },
   { command: 'link', description: 'Hubungkan akun: /link <kode>' },
@@ -42,6 +45,7 @@ export class BotCore {
     private pending: BotPendingRepository,
     private lockout: LinkLockout,
     private receiptHandler: ReceiptHandler,
+    private chatHandler: ChatHandler,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -81,15 +85,17 @@ export class BotCore {
       if (!('userId' in gate)) {
         return command === 'start' ? [send(START_UNLINKED)] : gate;
       }
-      return this.command(gate, input, command);
+      return this.command(gate, input, command, args);
     }
 
     const gate = await this.authenticate(input);
     if (!('userId' in gate)) return gate;
+    // Pertanyaan tanpa nominal tegas → chat AI, bukan parser transaksi.
+    if (shouldRouteToChat(text)) return this.chatHandler.handle(gate, text);
     return this.inputHandler.handle(gate, text);
   }
 
-  private async command(user: BotUser, input: IncomingMessage, command: string): Promise<BotReply[]> {
+  private async command(user: BotUser, input: IncomingMessage, command: string, args: string): Promise<BotReply[]> {
     switch (command) {
       case 'start':
         return [send(`👋 Akunmu sudah terhubung.\n\n${HELP_TEXT}`)];
@@ -103,6 +109,8 @@ export class BotCore {
         return this.reports.alokasi(user);
       case 'tabungan':
         return this.reports.tabungan(user);
+      case 'tanya':
+        return args.trim() === '' ? [send('Tulis pertanyaannya, mis.: /tanya berapa pengeluaranku bulan ini?')] : this.chatHandler.handle(user, args.trim());
       case 'undo':
         return this.undo(user);
       case 'batal':

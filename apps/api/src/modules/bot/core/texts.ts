@@ -8,6 +8,8 @@ export const HELP_TEXT = [
   '• transfer 500rb bca ke gopay',
   '(banyak baris = banyak transaksi)',
   '',
+  'Tanya AI: /tanya berapa pengeluaranku bulan ini?',
+  '',
   '/saldo /hariini /bulanini /alokasi /tabungan',
   '/undo /batal /unlink /help',
 ].join('\n');
