@@ -3,6 +3,7 @@ import { AllocationModule } from '../allocation/allocation.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { DashboardModule } from '../dashboard/dashboard.module';
 import { AiChatModule } from '../ai-chat/ai-chat.module';
+import { InsightsModule } from '../insights/insights.module';
 import { ReceiptsModule } from '../receipts/receipts.module';
 import { MerchantRulesModule } from '../merchant-rules/merchant-rules.module';
 import { SavingsModule } from '../savings/savings.module';
@@ -17,6 +18,7 @@ import { LinkLockout } from './core/link-lockout';
 import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
 import { ChatHandler } from './core/handlers/chat.handler';
 import { InputHandler } from './core/handlers/input.handler';
+import { InsightHandler } from './core/handlers/insight.handler';
 import { ReceiptHandler } from './core/handlers/receipt.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
 import { DevBotController } from './dev/dev-bot.controller';
@@ -37,6 +39,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     TelegramLinkModule,
     ReceiptsModule,
     AiChatModule,
+    InsightsModule,
   ],
   controllers: [TelegramWebhookController, ...devControllers],
   providers: [
@@ -45,6 +48,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     InputHandler,
     ReceiptHandler,
     ChatHandler,
+    InsightHandler,
     DraftCallbackHandler,
     ReportsHandler,
     BotPendingRepository,

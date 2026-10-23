@@ -82,4 +82,34 @@ export class DashboardRepository {
     `;
     return rows;
   }
+
+  /** Pengeluaran CONFIRMED terbesar dalam rentang (untuk insight). */
+  async largestExpenses(
+    userId: string,
+    start: Date,
+    endExclusive: Date,
+    limit: number,
+  ): Promise<Array<{ date: Date; amount: bigint; merchant: string | null; categoryName: string | null }>> {
+    const rows = await this.prisma.transaction.findMany({
+      where: { userId, status: 'CONFIRMED', type: 'EXPENSE', date: { gte: start, lt: endExclusive } },
+      orderBy: [{ amount: 'desc' }, { date: 'desc' }],
+      take: limit,
+      select: { date: true, amount: true, merchant: true, category: { select: { name: true } } },
+    });
+    return rows.map((r) => ({ date: r.date, amount: r.amount, merchant: r.merchant, categoryName: r.category?.name ?? null }));
+  }
+
+  /** Hari dengan total pengeluaran tertinggi dalam rentang. */
+  async peakSpendingDay(userId: string, start: Date, endExclusive: Date): Promise<{ day: string; total: bigint } | null> {
+    const rows = await this.prisma.$queryRaw<Array<{ day: string; total: bigint }>>`
+      SELECT to_char(date, 'YYYY-MM-DD') AS day, SUM(amount)::bigint AS total
+      FROM transactions
+      WHERE user_id = ${userId} AND status = 'CONFIRMED' AND type = 'EXPENSE'
+        AND date >= ${start}::date AND date < ${endExclusive}::date
+      GROUP BY 1
+      ORDER BY total DESC, day DESC
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  }
 }

@@ -6,6 +6,7 @@ import { BotPendingRepository } from '../bot-pending.repository';
 import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.handler';
 import { ChatHandler } from './handlers/chat.handler';
 import { InputHandler } from './handlers/input.handler';
+import { InsightHandler } from './handlers/insight.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { ReportsHandler } from './handlers/reports.handler';
 import { summarizeTx } from './format';
@@ -21,6 +22,7 @@ export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'alokasi', description: 'Status alokasi gaji bulan ini' },
   { command: 'tabungan', description: 'Progress goal tabungan' },
   { command: 'tanya', description: 'Tanya AI soal keuanganmu: /tanya <pertanyaan>' },
+  { command: 'insight', description: 'Insight & saran AI bulan ini' },
   { command: 'undo', description: 'Batalkan transaksi terakhir dari bot' },
   { command: 'batal', description: 'Buang draft yang belum disimpan' },
   { command: 'link', description: 'Hubungkan akun: /link <kode>' },
@@ -46,6 +48,7 @@ export class BotCore {
     private lockout: LinkLockout,
     private receiptHandler: ReceiptHandler,
     private chatHandler: ChatHandler,
+    private insightHandler: InsightHandler,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -111,6 +114,8 @@ export class BotCore {
         return this.reports.tabungan(user);
       case 'tanya':
         return args.trim() === '' ? [send('Tulis pertanyaannya, mis.: /tanya berapa pengeluaranku bulan ini?')] : this.chatHandler.handle(user, args.trim());
+      case 'insight':
+        return this.insightHandler.handle(user);
       case 'undo':
         return this.undo(user);
       case 'batal':

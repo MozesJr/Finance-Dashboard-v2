@@ -5,6 +5,7 @@ import { AiQuotaError, AiUnavailableError } from '../../ai/ai.errors';
 import { UsageMeter } from '../../ai/usage-meter';
 import { BotCore } from './bot-core.service';
 import { ChatHandler } from './handlers/chat.handler';
+import { InsightHandler } from './handlers/insight.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
@@ -236,10 +237,20 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
   );
   const chatSvc = { ask: jest.fn(async (): Promise<unknown> => ({ reply: 'jawaban AI', toolsUsed: [] })) };
   const chatHandler = new ChatHandler(chatSvc as never);
+  const insightSvc = {
+    getOrGenerate: jest.fn(async (): Promise<unknown> => ({
+      period: '2026-10',
+      provisional: true,
+      generatedAt: new Date(),
+      source: 'LLM',
+      narrative: { summary: 'Ringkasan Oktober.', findings: ['Temuan satu', 'Temuan dua', 'Temuan tiga'], suggestions: ['Saran satu', 'Saran dua', 'Saran tiga'] },
+    })),
+  };
+  const insightHandler = new InsightHandler(insightSvc as never);
   const receiptHandler = new ReceiptHandler(receiptsSvc as never, transactions as never, walletsService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
   const lockout = new LinkLockout();
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -247,7 +258,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, ai, aiUsage, receiptsSvc, chatSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, ai, aiUsage, receiptsSvc, chatSvc, insightSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -855,6 +866,41 @@ describe('BotCore', () => {
       w.chatSvc.ask.mockResolvedValue({ reply: 'x'.repeat(10_000), toolsUsed: [] });
       const bot = w.chat('c1', 'u1');
       expect((await bot.say('/tanya panjang'))[0].text.length).toBeLessThanOrEqual(3801);
+    });
+  });
+
+  describe('/insight', () => {
+    it('menampilkan insight bulan berjalan berlabel "sementara" (≤10 baris), memakai cache 6 jam', async () => {
+      const w = buildWorld();
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.say('/insight');
+      expect(w.insightSvc.getOrGenerate).toHaveBeenCalledWith('u1', expect.stringMatching(/^\d{4}-\d{2}$/), 6 * 60 * 60 * 1000);
+      expect(msg.text).toContain('Insight');
+      expect(msg.text).toContain('(sementara)');
+      expect(msg.text).toContain('1. Temuan satu');
+      expect(msg.text).toContain('3. Saran tiga');
+      expect(msg.text.split('\n').length).toBeLessThanOrEqual(10);
+    });
+
+    it('ringkasan template diberi catatan; error kuota/AI mati → pesan ramah; belum terhubung → AI tidak dipanggil', async () => {
+      const w = buildWorld();
+      const bot = w.chat('c1', 'u1');
+      w.insightSvc.getOrGenerate.mockResolvedValue({
+        period: '2026-09', provisional: false, generatedAt: new Date(), source: 'TEMPLATE',
+        narrative: { summary: 's', findings: ['a', 'b', 'c'], suggestions: ['d', 'e', 'f'] },
+      });
+      const [msg] = await bot.say('/insight');
+      expect(msg.text).toContain('Ringkasan otomatis (tanpa AI)');
+      expect(msg.text).not.toContain('(sementara)');
+
+      w.insightSvc.getOrGenerate.mockRejectedValue(new AiQuotaError(5));
+      expect((await bot.say('/insight'))[0].text).toContain('5/hari');
+      w.insightSvc.getOrGenerate.mockRejectedValue(new AiUnavailableError());
+      expect((await bot.say('/insight'))[0].text).toContain('tidak tersedia');
+
+      w.insightSvc.getOrGenerate.mockClear();
+      expect((await w.chat('c9').say('/insight'))[0].text).toContain('belum terhubung');
+      expect(w.insightSvc.getOrGenerate).not.toHaveBeenCalled();
     });
   });
 

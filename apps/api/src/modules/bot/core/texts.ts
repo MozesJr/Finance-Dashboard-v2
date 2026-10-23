@@ -9,6 +9,7 @@ export const HELP_TEXT = [
   '(banyak baris = banyak transaksi)',
   '',
   'Tanya AI: /tanya berapa pengeluaranku bulan ini?',
+  'Insight bulanan: /insight',
   '',
   '/saldo /hariini /bulanini /alokasi /tabungan',
   '/undo /batal /unlink /help',

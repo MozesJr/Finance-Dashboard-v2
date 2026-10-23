@@ -20,6 +20,7 @@ import { BotModule } from './modules/bot/bot.module';
 import { AiModule } from './modules/ai/ai.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { InsightsModule } from './modules/insights/insights.module';
 import { PrismaModule } from './prisma.module';
 
 @Module({
@@ -50,6 +51,7 @@ import { PrismaModule } from './prisma.module';
     ScheduleModule.forRoot(),
     ReceiptsModule,
     AiChatModule,
+    InsightsModule,
     BotModule,
   ],
   providers: [

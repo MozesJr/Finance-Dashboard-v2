@@ -152,6 +152,23 @@ export class DashboardService {
     };
   }
 
+  /** Tambahan untuk insight: 3 pengeluaran terbesar dan hari paling boros dalam satu bulan. */
+  async insightExtras(userId: string, month: string) {
+    const { start, endExclusive } = getMonthRange(month);
+    const [largest, peak] = await Promise.all([
+      this.repository.largestExpenses(userId, start, endExclusive, 3),
+      this.repository.peakSpendingDay(userId, start, endExclusive),
+    ]);
+    return {
+      largestExpenses: largest.map((l) => ({
+        date: l.date.toISOString().slice(0, 10),
+        label: l.merchant ?? l.categoryName ?? 'Tanpa keterangan',
+        amount: l.amount.toString(),
+      })),
+      peakDay: peak ? { date: peak.day, total: peak.total.toString() } : null,
+    };
+  }
+
   async trend(userId: string, query: DashboardTrendQuery): Promise<{ months: TrendItem[] }> {
     const last = getCurrentMonthJakarta();
     const first = shiftMonth(last, -(query.months - 1));

@@ -27,7 +27,7 @@ export const MAX_AI_CALLS_PER_MESSAGE = 3;
 
 const AI_FALLBACK_REASONS = new Set(['NO_AMOUNT', 'AMOUNT_TOO_SMALL', 'AMBIGUOUS_AMOUNT', 'TRANSFER_WALLETS']);
 /** Baris tanpa angka maupun kata bilangan tidak layak dikirim ke LLM. */
-const HAS_AMOUNT_HINT = /\d|\b(seribu|sejuta|ribu|juta|ratus|setengah)\b/i;
+const HAS_AMOUNT_HINT = /\d|\b(seribu|sejuta|ribu|ewu|juta|ratus|setengah)\b/i;
 
 /**
  * Pesan teks biasa → satu atau lebih draft transaksi. Parser aturan dulu; LLM hanya sebagai
