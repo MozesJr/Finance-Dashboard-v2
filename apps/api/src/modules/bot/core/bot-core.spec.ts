@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { getTodayInJakarta, toDateString } from 'shared';
 import { BotCore } from './bot-core.service';
+import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
 import { InputHandler } from './handlers/input.handler';
 import { ReportsHandler } from './handlers/reports.handler';
@@ -196,7 +197,8 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
   const inputHandler = new InputHandler(transactions as never, walletsService as never, categoriesService as never, rulesService as never, pending as never);
   const callbacks = new DraftCallbackHandler(transactions as never, walletsService as never, categoriesService as never, rulesService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never);
+  const lockout = new LinkLockout();
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -204,7 +206,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -249,6 +251,51 @@ describe('BotCore', () => {
       for (let i = 0; i < 5; i++) expect((await bot.say('/link 000000'))[0].text).toContain('tidak valid');
       expect((await bot.say('/link 123456'))[0].text).toContain('Terlalu banyak percobaan');
       expect(w.links.has('c1')).toBe(false);
+    });
+
+    it('kunci /link berlaku 15 menit sejak kegagalan ke-5 lalu terbuka sendiri', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-23T10:00:00Z'));
+      try {
+        const w = buildWorld();
+        w.codes.set('123456', 'u1');
+        const bot = w.chat('c1');
+        for (let i = 0; i < 4; i++) expect((await bot.say('/link 000000'))[0].text).not.toContain('dikunci');
+        expect((await bot.say('/link 000000'))[0].text).toContain('dikunci 15 menit');
+
+        jest.setSystemTime(new Date('2026-10-23T10:07:00Z'));
+        expect((await bot.say('/link 123456'))[0].text).toContain('Coba lagi dalam 8 menit');
+        expect(w.links.has('c1')).toBe(false);
+
+        jest.setSystemTime(new Date(Date.parse('2026-10-23T10:00:00Z') + LINK_LOCK_MS + 1000));
+        expect((await bot.say('/link 123456'))[0].text).toContain('Akun terhubung');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('admin membuka kunci (unlockChat) → chat bisa /link lagi sebelum 15 menit habis', async () => {
+      const w = buildWorld();
+      w.codes.set('123456', 'u1');
+      const bot = w.chat('c1');
+      for (let i = 0; i < 5; i++) await bot.say('/link 000000');
+      expect(w.lockout.listLocked()).toHaveLength(1);
+      expect((await bot.say('/link 123456'))[0].text).toContain('Terlalu banyak percobaan');
+
+      expect(w.lockout.unlockChat('c1')).toBe(1);
+      expect(w.lockout.unlockChat('c1')).toBe(0);
+      expect(w.lockout.listLocked()).toHaveLength(0);
+      expect((await bot.say('/link 123456'))[0].text).toContain('Akun terhubung');
+    });
+
+    it('link berhasil mereset hitungan kegagalan', async () => {
+      const w = buildWorld();
+      w.codes.set('123456', 'u1');
+      const bot = w.chat('c1');
+      for (let i = 0; i < 4; i++) await bot.say('/link 000000');
+      await bot.say('/link 123456');
+      expect(w.lockout.remainingMs(LinkLockout.key('SIMULATOR', 'c1'))).toBe(0);
+      await bot.say('/unlink');
+      for (let i = 0; i < 4; i++) expect((await bot.say('/link 000000'))[0].text).not.toContain('dikunci');
     });
 
     it('/link tanpa kode & /unlink', async () => {

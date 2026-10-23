@@ -11,6 +11,7 @@ import { TelegramBotService } from './adapters/telegram/telegram-bot.service';
 import { TelegramWebhookController } from './adapters/telegram/telegram-webhook.controller';
 import { BotPendingRepository } from './bot-pending.repository';
 import { BotCore } from './core/bot-core.service';
+import { LinkLockout } from './core/link-lockout';
 import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
 import { InputHandler } from './core/handlers/input.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
@@ -34,6 +35,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
   controllers: [TelegramWebhookController, ...devControllers],
   providers: [
     BotCore,
+    LinkLockout,
     InputHandler,
     DraftCallbackHandler,
     ReportsHandler,
@@ -41,5 +43,6 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     TelegramBotService,
     BotJobsService,
   ],
+  exports: [LinkLockout],
 })
 export class BotModule {}

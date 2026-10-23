@@ -6,6 +6,7 @@ import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.
 import { InputHandler } from './handlers/input.handler';
 import { ReportsHandler } from './handlers/reports.handler';
 import { summarizeTx } from './format';
+import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { SlidingWindowLimiter } from './rate-limiter';
 import { HELP_TEXT, NOT_LINKED, START_UNLINKED, STATUS_BLOCKED } from './texts';
 import { BotInput, BotReply, BotUser, edit, IncomingMessage, send } from './types';
@@ -24,15 +25,12 @@ export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
 ];
 
 const RATE_LIMIT_PER_MINUTE = 20;
-const LINK_FAIL_LIMIT = 5;
-const LINK_FAIL_WINDOW_MS = 10 * 60 * 1000;
 
 /** Otak bot yang tidak bergantung pada channel. Handler hanya memanggil service domain. */
 @Injectable()
 export class BotCore {
   private readonly logger = new Logger(BotCore.name);
   private readonly limiter = new SlidingWindowLimiter(RATE_LIMIT_PER_MINUTE, 60_000);
-  private readonly linkFailures = new SlidingWindowLimiter(LINK_FAIL_LIMIT, LINK_FAIL_WINDOW_MS);
 
   constructor(
     private links: TelegramLinkService,
@@ -41,6 +39,7 @@ export class BotCore {
     private reports: ReportsHandler,
     private transactions: TransactionsService,
     private pending: BotPendingRepository,
+    private lockout: LinkLockout,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -114,18 +113,21 @@ export class BotCore {
   }
 
   private async link(input: IncomingMessage, key: string, args: string): Promise<BotReply[]> {
-    if (!this.linkFailures.canProceed(key)) {
-      return [send('Terlalu banyak percobaan kode yang salah. Coba lagi dalam beberapa menit.')];
+    const lockedMs = this.lockout.remainingMs(key);
+    if (lockedMs > 0) {
+      return [send(`Terlalu banyak percobaan kode yang salah. Coba lagi dalam ${Math.ceil(lockedMs / 60_000)} menit.`)];
     }
     if (args.trim() === '') return [send('Kirim kode dari web: /link 123456')];
 
     const result = await this.links.linkByCode(args, input.chatId, input.username ?? null);
     if (result.ok) {
+      this.lockout.clear(key);
       return [send('✅ Akun terhubung! Coba kirim: makan siang 35rb\n\nKetik /help untuk bantuan.')];
     }
     if (result.reason === 'INVALID') {
-      this.linkFailures.record(key);
-      return [send('Kode tidak valid atau sudah kedaluwarsa. Buat kode baru di web (Pengaturan → Telegram).')];
+      const locked = this.lockout.recordFailure(input.channel, input.chatId, input.username ?? null);
+      const notice = locked ? `\nPercobaan habis: chat ini dikunci ${LINK_LOCK_MS / 60_000} menit.` : '';
+      return [send(`Kode tidak valid atau sudah kedaluwarsa. Buat kode baru di web (Pengaturan → Telegram).${notice}`)];
     }
     if (result.reason === 'CHAT_TAKEN') {
       return [send('Chat ini sudah terhubung ke sebuah akun. Kirim /unlink dulu bila ingin mengganti.')];
