@@ -14,13 +14,13 @@ WORKDIR /repo
 
 # ---------- build: install penuh, build shared + api, generate Prisma client ----------
 FROM base AS build
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
-COPY packages/shared/package.json packages/shared/
+COPY --chmod=a+rX pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY --chmod=a+rX apps/api/package.json apps/api/
+COPY --chmod=a+rX apps/web/package.json apps/web/
+COPY --chmod=a+rX packages/shared/package.json packages/shared/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
-COPY packages/shared packages/shared
-COPY apps/api apps/api
+COPY --chmod=a+rX packages/shared packages/shared
+COPY --chmod=a+rX apps/api apps/api
 RUN pnpm --filter shared build \
  && pnpm --filter api exec prisma generate \
  && pnpm --filter api build
@@ -42,11 +42,12 @@ FROM build AS prod-deps
 RUN pnpm --filter api deploy --prod --legacy /out
 
 # ---------- tools: dipakai migrate deploy & create-admin (butuh prisma CLI + ts-node) ----------
+# Dijalankan sebagai user non-root tanpa pnpm/corepack (tidak ada unduhan saat runtime): pakai binary lokal.
 FROM build AS tools
 WORKDIR /repo/apps/api
 ENV NODE_ENV=production
 USER node
-CMD ["pnpm", "exec", "prisma", "migrate", "status"]
+CMD ["./node_modules/.bin/prisma", "migrate", "status"]
 
 # ---------- runtime ----------
 FROM ${NODE_IMAGE} AS runtime

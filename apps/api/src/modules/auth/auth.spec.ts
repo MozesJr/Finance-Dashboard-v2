@@ -293,8 +293,30 @@ describe('AuthService', () => {
       (usersService.getUserById as jest.Mock).mockResolvedValue(mockUser);
       (refreshTokenRepository.create as jest.Mock).mockResolvedValue({ id: 'token-2' });
 
-      // Note: actual refresh would need proper password hash verification
-      // This test validates the rotation logic path exists
+      const res = createMockResponse() as Response;
+      await service.refresh('old-refresh-token', res);
+
+      expect(refreshTokenRepository.markAsRevoked).toHaveBeenCalledWith(expect.any(String), 'token-2');
+      const names = (res.cookie as jest.Mock).mock.calls.map((c: unknown[]) => c[0]);
+      expect(names).toEqual(expect.arrayContaining(['access_token', 'refresh_token']));
+    });
+
+    it('does not clear the refresh cookie it just set (same name and path)', async () => {
+      const storedToken = {
+        id: 'token-1',
+        userId: mockUser.id,
+        tokenHash: 'old-hash',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+      (refreshTokenRepository.findByTokenHash as jest.Mock).mockResolvedValue(storedToken);
+      (usersService.getUserById as jest.Mock).mockResolvedValue(mockUser);
+      (refreshTokenRepository.create as jest.Mock).mockResolvedValue({ id: 'token-2' });
+
+      const res = createMockResponse() as Response;
+      await service.refresh('old-refresh-token', res);
+
+      expect(res.clearCookie).not.toHaveBeenCalled();
     });
 
     it('should revoke all tokens on reuse detection outside grace period', async () => {

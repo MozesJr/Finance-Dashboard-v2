@@ -57,7 +57,7 @@ services:
     image: dfv2-tools:${GIT_COMMIT:-dev}
     env_file: .env.prod
     networks: [master_db_net]
-    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
     mem_limit: 512m
 
   # Buat admin / nonaktifkan admin lama (lihat docs/DEPLOY.md langkah 10):
@@ -73,7 +73,7 @@ services:
     networks: [master_db_net]
     volumes:
       - ./create-admin.ts:/repo/apps/api/deploy/create-admin.ts:ro
-    entrypoint: ["pnpm", "exec", "ts-node", "deploy/create-admin.ts"]
+    entrypoint: ["./node_modules/.bin/ts-node", "deploy/create-admin.ts"]
     mem_limit: 512m
 
 networks:

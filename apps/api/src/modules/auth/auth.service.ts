@@ -200,9 +200,6 @@ export class AuthService {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Clear old refresh token cookie (for old session cleanup)
-    res.clearCookie('refresh_token', { path: '/api/auth' });
-
     return toUserResponse(user);
   }
 

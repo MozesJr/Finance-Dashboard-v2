@@ -93,7 +93,7 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod --p
 Cek dulu apa yang akan diterapkan:
 
 ```bash
-docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod --profile tools run --rm migrate pnpm exec prisma migrate status
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod --profile tools run --rm migrate ./node_modules/.bin/prisma migrate status
 ```
 
 Tampilkan migrasi yang pending dan pastikan tidak destruktif (DROP/ALTER yang menghapus data). Kalau aman:
