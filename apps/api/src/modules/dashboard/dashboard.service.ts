@@ -4,7 +4,7 @@ import type { PeriodInfo } from 'shared';
 import { PeriodsService } from '../periods/periods.service';
 import { percentChange, percentOf } from '../../common/percent';
 import { WalletsService } from '../wallets/wallets.service';
-import { DashboardRepository } from './dashboard.repository';
+import { CategoryTotal, DashboardRepository } from './dashboard.repository';
 import { DashboardByCategoryQuery, DashboardSummaryQuery, DashboardTrendQuery } from './dto/dashboard.dto';
 
 export interface MonthTotals {
@@ -77,12 +77,10 @@ export class DashboardService {
   async summary(userId: string, query: DashboardSummaryQuery): Promise<SummaryResponse> {
     const { key: month, startDay } = await this.periods.resolve(userId, query.month);
     const previousMonth = shiftMonth(month, -1);
-    const cur = getPeriodRange(month, startDay);
-    const prev = getPeriodRange(previousMonth, startDay);
 
     const [current, previous, activeWallets] = await Promise.all([
-      this.repository.sumByType(userId, cur.start, cur.endExclusive),
-      this.repository.sumByType(userId, prev.start, prev.endExclusive),
+      this.repository.sumByPeriod(userId, month, month, startDay),
+      this.repository.sumByPeriod(userId, previousMonth, previousMonth, startDay),
       this.wallets.list(userId, false),
     ]);
 
@@ -114,8 +112,7 @@ export class DashboardService {
 
   async byCategory(userId: string, query: DashboardByCategoryQuery): Promise<ByCategoryResponse> {
     const { key: month, startDay } = await this.periods.resolve(userId, query.month);
-    const { start, endExclusive } = getPeriodRange(month, startDay);
-    const totals = await this.repository.totalsByCategory(userId, query.type, start, endExclusive);
+    const totals = await this.repository.totalsByPeriodCategory(userId, query.type, month, month, startDay);
     const infos = await this.repository.findCategories(
       totals.map((t) => t.categoryId).filter((id): id is string => id !== null),
     );
@@ -143,12 +140,16 @@ export class DashboardService {
     return { month, period: periodInfo(month, startDay), type: query.type, total: grand.toString(), items };
   }
 
-  /** Ringkasan rentang tanggal arbitrer (hari ini, bulan ini, ...) + 3 kategori pengeluaran terbesar. */
+  /** Ringkasan rentang tanggal arbitrer (mis. hari ini, nominal penuh di tanggal transaksi) + kategori pengeluaran terbesar. */
   async period(userId: string, start: Date, endExclusive: Date, topN = 3): Promise<PeriodReport> {
     const [sums, totals] = await Promise.all([
       this.repository.sumByType(userId, start, endExclusive),
       this.repository.totalsByCategory(userId, 'EXPENSE', start, endExclusive),
     ]);
+    return this.buildReport(sums, totals, topN);
+  }
+
+  private async buildReport(sums: { income: bigint; expense: bigint }, totals: CategoryTotal[], topN: number): Promise<PeriodReport> {
     const sorted = [...totals].sort((a, b) => (b.total > a.total ? 1 : b.total < a.total ? -1 : 0)).slice(0, topN);
     const infos = await this.repository.findCategories(sorted.map((t) => t.categoryId).filter((id): id is string => id !== null));
     const byId = new Map(infos.map((c) => [c.id, c]));
@@ -166,6 +167,16 @@ export class DashboardService {
         };
       }),
     };
+  }
+
+  /** Ringkasan satu periode keuangan (dengan pembagian biaya) + kategori pengeluaran terbesar; untuk bot (/bulanini). */
+  async periodReport(userId: string, key: string, topN = 3): Promise<PeriodReport> {
+    const { startDay } = await this.periods.resolve(userId, key);
+    const [sums, totals] = await Promise.all([
+      this.repository.sumByPeriod(userId, key, key, startDay),
+      this.repository.totalsByPeriodCategory(userId, 'EXPENSE', key, key, startDay),
+    ]);
+    return this.buildReport(sums, totals, topN);
   }
 
   /** Tambahan untuk insight: 3 pengeluaran terbesar dan hari paling boros dalam satu bulan. */
@@ -189,12 +200,7 @@ export class DashboardService {
   async trend(userId: string, query: DashboardTrendQuery): Promise<{ months: TrendItem[] }> {
     const { key: last, startDay } = await this.periods.resolve(userId);
     const first = shiftMonth(last, -(query.months - 1));
-    const rows = await this.repository.monthlyTotals(
-      userId,
-      getPeriodRange(first, startDay).start,
-      getPeriodRange(last, startDay).endExclusive,
-      startDay,
-    );
+    const rows = await this.repository.monthlyTotals(userId, first, last, startDay);
 
     const months: TrendItem[] = [];
     for (let i = 0; i < query.months; i++) {

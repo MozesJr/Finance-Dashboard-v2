@@ -309,8 +309,8 @@ export class SavingsService {
     const { key: current, startDay } = await this.periods.resolve(userId);
     const totals = await this.repository.monthlyExpenseTotals(
       userId,
-      getPeriodRange(shiftMonth(current, -3), startDay).start,
-      getPeriodRange(current, startDay).start, // 3 periode penuh terakhir: periode berjalan tidak ikut
+      shiftMonth(current, -3),
+      shiftMonth(current, -1), // 3 periode penuh terakhir: periode berjalan tidak ikut
       startDay,
     );
     return averageExpense(totals);

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContributionType, Prisma, SavingsContribution } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-import { periodKeySql } from '../periods/periods.repository';
+import { sharesSql } from '../periods/periods.repository';
 
 const GOAL_INCLUDE = { wallet: { select: { id: true, name: true } } } satisfies Prisma.SavingsGoalInclude;
 export type GoalWithWallet = Prisma.SavingsGoalGetPayload<{ include: typeof GOAL_INCLUDE }>;
@@ -199,13 +199,12 @@ export class SavingsRepository {
     return new Map(rows.map((r) => [r.goal_id, r.net]));
   }
 
-  /** Total pengeluaran CONFIRMED per periode keuangan (hanya periode yang punya data), dihitung di DB. */
-  async monthlyExpenseTotals(userId: string, start: Date, endExclusive: Date, startDay = 1): Promise<MonthlyTotal[]> {
+  /** Total pengeluaran CONFIRMED per periode keuangan (hanya periode yang punya data), dengan pembagian biaya, dihitung di DB. */
+  async monthlyExpenseTotals(userId: string, firstKey: string, lastKey: string, startDay = 1): Promise<MonthlyTotal[]> {
     return this.prisma.$queryRaw<MonthlyTotal[]>`
-      SELECT ${periodKeySql(startDay)} AS month, SUM(amount)::bigint AS total
-      FROM transactions
-      WHERE user_id = ${userId} AND status = 'CONFIRMED' AND type = 'EXPENSE'
-        AND date >= ${start}::date AND date < ${endExclusive}::date
+      SELECT s.period_key AS month, SUM(s.share)::bigint AS total
+      FROM ${sharesSql(userId, startDay)} s
+      WHERE s.type = 'EXPENSE' AND s.period_key BETWEEN ${firstKey} AND ${lastKey}
       GROUP BY 1
     `;
   }

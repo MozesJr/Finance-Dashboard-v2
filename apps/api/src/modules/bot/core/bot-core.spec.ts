@@ -8,6 +8,7 @@ import { ChatHandler } from './handlers/chat.handler';
 import { InsightHandler } from './handlers/insight.handler';
 import { InvestmentHandler } from './handlers/investment.handler';
 import { PaydayHandler } from './handlers/payday.handler';
+import { BillsHandler } from './handlers/bills.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
@@ -233,14 +234,13 @@ function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[]; s
     }),
     unlinkChat: jest.fn(async (chatId: string) => links.delete(chatId)),
   };
-  const dashboard = {
-    period: jest.fn(async () => ({
+  const reportOf = () => ({
       totalIncome: '5000000',
       totalExpense: '1252500',
       net: '3747500',
       topExpenseCategories: [{ name: 'Makan & Minum', icon: '🍽️', total: '1217500', percent: 97.2 }],
-    })),
-  };
+  });
+  const dashboard = { period: jest.fn(async () => reportOf()), periodReport: jest.fn(async () => reportOf()) };
   const savings = { list: jest.fn(async () => [{ icon: '🛟', name: 'Dana Darurat', collected: '1800000', target: '1500000', percent: 120 }]) };
   const allocation = {
     report: jest.fn(async () => ({
@@ -301,7 +301,9 @@ function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[]; s
   const investmentHandler = new InvestmentHandler(walletsService as never);
   const paydaySvc = { getChecklist: jest.fn(async () => null), runAction: jest.fn() };
   const paydayHandler = new PaydayHandler(paydaySvc as never, transactions as never, walletsService as never);
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler, investmentHandler, paydayHandler);
+  const billsSvc = { overview: jest.fn(), pay: jest.fn(), snooze: jest.fn() };
+  const billsHandler = new BillsHandler(billsSvc as never, transactions as never);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler, investmentHandler, paydayHandler, billsHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -309,7 +311,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[]; s
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, walletsService, ai, aiUsage, receiptsSvc, chatSvc, insightSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, billsSvc, walletsService, ai, aiUsage, receiptsSvc, chatSvc, insightSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -1202,9 +1204,9 @@ describe('BotCore', () => {
       const w = buildWorld({ startDay: 25 });
       const [msg] = await w.chat('c1', 'u1').say('/bulanini');
       expect(msg.text).toMatch(/^📅 Periode ini: \w{3} \d{4} \(25 \w{3} – 24 \w{3}\)/);
-      const [, start, end] = w.dashboard.period.mock.calls[0] as unknown as [string, Date, Date];
-      expect(start.getUTCDate()).toBe(25);
-      expect(end.getUTCDate()).toBe(25);
+      // /bulanini memakai agregasi periode (kunci periode, dengan pembagian biaya); /hariini tetap rentang tanggal.
+      expect(w.dashboard.periodReport).toHaveBeenCalledWith('u1', expect.stringMatching(/^\d{4}-\d{2}$/), 3);
+      expect(w.dashboard.period).not.toHaveBeenCalled();
     });
 
     it('/hariini, /bulanini, /alokasi, /tabungan: ringkas (≤10 baris) dan Rupiah', async () => {
@@ -1217,6 +1219,7 @@ describe('BotCore', () => {
       }
       expect((await bot.say('/hariini'))[0].text).toContain('Masuk: Rp5.000.000');
       expect(w.dashboard.period).toHaveBeenCalled();
+      expect(w.dashboard.periodReport).toHaveBeenCalled();
       expect((await bot.say('/alokasi'))[0].text).toContain('Fase 2');
     });
 

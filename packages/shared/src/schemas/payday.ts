@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MonthStringSchema, UuidSchema } from './common';
 
-/** Aksi checklist gajian: itemKey "s:<posId>" (setor), "e:<posId>" (catat pengeluaran), "inc" (perbarui gaji di alokasi). */
+/** Aksi checklist gajian: itemKey "s:<posId>" (setor), "e:<posId>" (catat pengeluaran), "t:<tagihanId>" (bayar tagihan), "inc" (perbarui gaji di alokasi). */
 export const PaydayActionSchema = z.object({
   itemKey: z.string().min(1).max(60),
   periodKey: MonthStringSchema.optional(),

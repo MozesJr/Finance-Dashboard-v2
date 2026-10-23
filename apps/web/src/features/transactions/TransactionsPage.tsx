@@ -57,7 +57,16 @@ function Title({ tx }: { tx: TransactionDto }) {
       </span>
     );
   }
-  return <>{tx.merchant || tx.category?.name || TX_TYPE_LABELS[tx.type]}</>;
+  return (
+    <>
+      {tx.merchant || tx.category?.name || TX_TYPE_LABELS[tx.type]}
+      {tx.spreadPeriods > 1 && (
+        <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted" data-testid="spread-badge">
+          dibagi {tx.spreadPeriods} periode
+        </span>
+      )}
+    </>
+  );
 }
 
 export function TransactionsPage() {

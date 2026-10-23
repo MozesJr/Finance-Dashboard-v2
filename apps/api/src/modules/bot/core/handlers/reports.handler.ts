@@ -47,11 +47,15 @@ export class ReportsHandler {
 
   async bulanIni(user: BotUser): Promise<BotReply[]> {
     const p = await this.periods.current(user.userId);
-    return this.period(user, `📅 Periode ini: ${p.label}`, p.start, p.endExclusive);
+    const r = await this.dashboard.periodReport(user.userId, p.key, 3);
+    return this.render(`📅 Periode ini: ${p.label}`, r);
   }
 
   private async period(user: BotUser, title: string, start: Date, endExclusive: Date): Promise<BotReply[]> {
-    const r = await this.dashboard.period(user.userId, start, endExclusive, 3);
+    return this.render(title, await this.dashboard.period(user.userId, start, endExclusive, 3));
+  }
+
+  private render(title: string, r: Awaited<ReturnType<DashboardService['period']>>): BotReply[] {
     const lines = [
       title,
       `Masuk: ${formatMoneyId(r.totalIncome)}`,

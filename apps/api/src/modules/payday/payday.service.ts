@@ -2,15 +2,16 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { formatMoneyId, getTodayInJakarta, PaydayActionInput, toDateString } from 'shared';
 import type { PeriodInfo } from 'shared';
 import { AllocationService, ReportResponse } from '../allocation/allocation.service';
+import { BillsService } from '../bills/bills.service';
 import { PeriodsService, toPeriodInfo } from '../periods/periods.service';
 import { SavingsService } from '../savings/savings.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { PaydayRepository, SalaryRow } from './payday.repository';
 
-export type ChecklistItemKind = 'SAVING' | 'EXPENSE_SINGLE' | 'EXPENSE_INFO' | 'INCOME';
+export type ChecklistItemKind = 'SAVING' | 'EXPENSE_SINGLE' | 'EXPENSE_INFO' | 'INCOME' | 'BILL';
 
 export interface ChecklistItem {
-  /** "s:<posId>" | "e:<posId>" | "i:<posId>" (info) | "inc" */
+  /** "s:<posId>" | "e:<posId>" | "i:<posId>" (info) | "t:<tagihanId>" | "inc" */
   key: string;
   kind: ChecklistItemKind;
   name: string;
@@ -25,6 +26,10 @@ export interface ChecklistItem {
   categoryId?: string;
   /** Hanya INCOME: gaji di rencana saat ini. */
   planIncome?: string;
+  /** Hanya BILL. */
+  billId?: string;
+  dueDate?: string;
+  intervalMonths?: number;
 }
 
 export interface Checklist {
@@ -49,6 +54,7 @@ export class PaydayService {
     private savings: SavingsService,
     private transactions: TransactionsService,
     private periods: PeriodsService,
+    private bills: BillsService,
   ) {}
 
   /** Checklist periode (default: berjalan); null bila belum ada gaji CONFIRMED di periode itu. */
@@ -58,10 +64,11 @@ export class PaydayService {
     if (salaries.length === 0) return null;
     const salary = salaries[0];
 
-    const [done, report, goals] = await Promise.all([
+    const [done, report, goals, dueBills] = await Promise.all([
       this.repository.listActionKeys(userId, period.key),
       this.safeReport(userId, period.key),
       this.savings.list(userId, true),
+      this.bills.dueInPeriod(userId, period.start, period.endExclusive),
     ]);
     const doneKeys = new Set(done);
     const goalById = new Map(goals.map((g) => [g.id, g]));
@@ -86,6 +93,14 @@ export class PaydayService {
       if (BigInt(report.monthlyIncome) !== salary.amount) {
         items.push({ key: 'inc', kind: 'INCOME', name: 'Perbarui gaji di alokasi', icon: null, amount: salary.amount.toString(), planIncome: report.monthlyIncome, done: doneKeys.has('inc') });
       }
+    }
+
+    // Tagihan berkala yang jatuh tempo (atau lewat) di periode ini; "sudah" bila sudah dibayar atau tombolnya sudah dijalankan.
+    for (const { bill, done: paid } of dueBills) {
+      items.push({
+        key: `t:${bill.id}`, kind: 'BILL', name: bill.name, icon: '🧾', amount: bill.amount, done: paid || doneKeys.has(`t:${bill.id}`),
+        billId: bill.id, dueDate: bill.nextDueDate, intervalMonths: bill.intervalMonths,
+      });
     }
 
     return {
@@ -152,10 +167,15 @@ export class PaydayService {
         }
         await this.transactions.create(
           userId,
-          { type: 'EXPENSE', walletId: c.salary.walletId, categoryId: item.categoryId, amount, date: today, merchant: item.name, note: `Alokasi gaji ${c.period.label}` },
+          { type: 'EXPENSE', walletId: c.salary.walletId, categoryId: item.categoryId, amount, date: today, merchant: item.name, note: `Alokasi gaji ${c.period.label}`, spreadPeriods: 1 },
           { source: 'WEB', status: 'CONFIRMED' },
         );
         return { status: 'DONE', message: `${item.name} ${formatMoneyId(amount)} dicatat.` };
+      }
+      case 'BILL': {
+        const paid = await this.bills.pay(userId, item.billId as string, {}, channel);
+        if (paid.status === 'DRAFT') return { status: 'DRAFT', message: `Draft ${item.name} ${formatMoneyId(amount)} dibuat.`, transactionId: paid.transactionId };
+        return { status: 'DONE', message: `${item.name} ${formatMoneyId(amount)} dibayar.` };
       }
       case 'INCOME': {
         await this.allocation.updatePlan(userId, { monthlyIncome: amount });

@@ -15,8 +15,18 @@ const CategoryIdSchema = z.string().trim().min(1, 'ID kategori tidak valid').max
 
 const TextSchema = z.string().trim().max(200, 'Maksimal 200 karakter');
 
+export const MAX_SPREAD_PERIODS = 12;
+
+/** Bagi ke N periode (1–12) untuk laporan; hanya pengeluaran. */
+export const SpreadPeriodsSchema = z
+  .number({ invalid_type_error: 'Jumlah periode harus angka' })
+  .int('Jumlah periode harus bilangan bulat')
+  .min(1, 'Minimal 1 periode')
+  .max(MAX_SPREAD_PERIODS, `Maksimal ${MAX_SPREAD_PERIODS} periode`);
+
 export interface TransactionShape {
   type: TxType;
+  spreadPeriods?: number;
   walletId: string;
   toWalletId?: string | null;
   categoryId?: string | null;
@@ -27,6 +37,9 @@ export interface TransactionShape {
  * Mengembalikan pesan error atau null jika valid.
  */
 export function checkTransactionShape(tx: TransactionShape): { field: string; message: string } | null {
+  if ((tx.spreadPeriods ?? 1) > 1 && tx.type !== 'EXPENSE') {
+    return { field: 'spreadPeriods', message: 'Pembagian ke beberapa periode hanya untuk pengeluaran' };
+  }
   if (tx.type === 'TRANSFER') {
     if (!tx.toWalletId) return { field: 'toWalletId', message: 'Wallet tujuan wajib diisi untuk transfer' };
     if (tx.toWalletId === tx.walletId) {
@@ -48,6 +61,8 @@ export const CreateTransactionSchema = z
     categoryId: CategoryIdSchema.nullable().optional(),
     amount: PositiveMoneyInputSchema,
     date: DateStringSchema.optional(),
+    /** Pengeluaran dibagi rata ke N periode berturut-turut untuk laporan (saldo dompet tidak terpengaruh). */
+    spreadPeriods: SpreadPeriodsSchema.default(1),
     merchant: TextSchema.nullable().optional(),
     note: TextSchema.nullable().optional(),
     /** Struk hasil unggahan (milik user) yang dilampirkan ke transaksi. */
@@ -68,6 +83,7 @@ export const UpdateTransactionSchema = z
     categoryId: CategoryIdSchema.nullable(),
     amount: PositiveMoneyInputSchema,
     date: DateStringSchema,
+    spreadPeriods: SpreadPeriodsSchema,
     merchant: TextSchema.nullable(),
     note: TextSchema.nullable(),
   })

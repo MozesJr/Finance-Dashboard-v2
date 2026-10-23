@@ -5,6 +5,7 @@ import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CurrentUserData } from '../../../common/types';
 import { BotCore } from '../core/bot-core.service';
 import { DevOutbox } from '../bot-notifier';
+import { BillRemindersJob } from '../jobs/bill-reminders.job';
 import { TelegramLinkService } from '../../telegram-link/telegram-link.service';
 
 const SimulateSchema = z
@@ -35,7 +36,16 @@ export class DevBotController {
     private core: BotCore,
     private outbox: DevOutbox,
     private links: TelegramLinkService,
+    private billReminders: BillRemindersJob,
   ) {}
+
+  /** DEV-ONLY: jalankan job pengingat tagihan untuk tanggal tertentu (default hari ini) tanpa menunggu cron 08:00. */
+  @Post('run-bill-reminders')
+  async runBillReminders(@Body() body: { date?: string } = {}) {
+    if (process.env.NODE_ENV !== 'development') throw new ForbiddenException('Hanya tersedia di mode development.');
+    const date = body?.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? new Date(`${body.date}T00:00:00Z`) : undefined;
+    return this.billReminders.run(date);
+  }
 
   /** Pesan yang didorong server ke chat simulasi user ini (checklist gajian, pengingat); sekali baca. */
   @Get('outbox')

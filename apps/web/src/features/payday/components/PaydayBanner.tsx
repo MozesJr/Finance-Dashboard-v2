@@ -15,6 +15,7 @@ const ACTION_LABEL: Record<ChecklistItemDto['kind'], string> = {
   EXPENSE_SINGLE: 'Catat',
   EXPENSE_INFO: '',
   INCOME: 'Perbarui gaji',
+  BILL: 'Bayar',
 };
 
 function Row({ c, item }: { c: ChecklistDto; item: ChecklistItemDto }) {
@@ -29,7 +30,9 @@ function Row({ c, item }: { c: ChecklistDto; item: ChecklistItemDto }) {
       ? `alokasi ${formatMoney(item.planIncome ?? '0')} → gaji diterima ${formatMoney(item.amount)}`
       : item.kind === 'EXPENSE_INFO'
         ? `anggaran ${formatMoney(item.amount)} (beberapa kategori)`
-        : formatMoney(item.amount);
+        : item.kind === 'BILL'
+          ? `${formatMoney(item.amount)} · jatuh tempo ${item.dueDate ?? ''}`
+          : formatMoney(item.amount);
 
   const submit = () =>
     run.mutate(
@@ -75,7 +78,7 @@ function Row({ c, item }: { c: ChecklistDto; item: ChecklistItemDto }) {
 export function PaydayBanner() {
   const { data } = usePayday();
   const c = data?.checklist;
-  if (!c || !c.hasPlan) return null;
+  if (!c || (!c.hasPlan && c.items.length === 0)) return null;
   const actionable = c.items.filter((i) => i.kind !== 'EXPENSE_INFO');
   if (actionable.length === 0) return null;
   const allDone = actionable.every((i) => i.done);

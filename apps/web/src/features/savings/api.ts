@@ -110,6 +110,8 @@ export interface ReportItemDto {
   diff: string;
   usedPercent: number | null;
   status: AllocationStatus;
+  /** Cadangan per periode untuk tagihan berkala yang kategorinya termasuk pos ini. */
+  reserved: string;
 }
 
 export interface ReportDto {

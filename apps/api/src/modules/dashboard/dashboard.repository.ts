@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CategoryType } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
-import { periodKeySql } from '../periods/periods.repository';
+import { sharesSql } from '../periods/periods.repository';
 
 export interface CategoryTotal {
   categoryId: string | null;
@@ -22,7 +22,11 @@ export interface MonthlyTotal {
   total: bigint;
 }
 
-/** Semua agregasi: hanya CONFIRMED, hanya INCOME/EXPENSE (TRANSFER tidak dihitung), difilter userId. */
+/**
+ * Semua agregasi: hanya CONFIRMED, hanya INCOME/EXPENSE (TRANSFER dan ADJUSTMENT tidak dihitung), difilter userId.
+ * Fungsi *ByPeriod memakai pembagian biaya antar periode (spreadPeriods); fungsi berbasis tanggal (hari ini, transaksi
+ * terbesar, hari paling boros) memakai nominal penuh di tanggal transaksi.
+ */
 @Injectable()
 export class DashboardRepository {
   constructor(private prisma: PrismaService) {}
@@ -40,6 +44,29 @@ export class DashboardRepository {
     });
     const sum = (type: string) => groups.find((g) => g.type === type)?._sum.amount ?? 0n;
     return { income: sum('INCOME'), expense: sum('EXPENSE') };
+  }
+
+  /** Total per tipe untuk periode keuangan startKey..endKey (kunci YYYY-MM), dengan pembagian biaya. */
+  async sumByPeriod(userId: string, startKey: string, endKey: string, startDay: number): Promise<{ income: bigint; expense: bigint }> {
+    const rows = await this.prisma.$queryRaw<Array<{ type: string; total: bigint }>>`
+      SELECT s.type, SUM(s.share)::bigint AS total
+      FROM ${sharesSql(userId, startDay)} s
+      WHERE s.period_key BETWEEN ${startKey} AND ${endKey}
+      GROUP BY s.type
+    `;
+    const sum = (type: string) => rows.find((r) => r.type === type)?.total ?? 0n;
+    return { income: sum('INCOME'), expense: sum('EXPENSE') };
+  }
+
+  /** Total per kategori untuk periode keuangan startKey..endKey, dengan pembagian biaya. */
+  async totalsByPeriodCategory(userId: string, type: CategoryType, startKey: string, endKey: string, startDay: number): Promise<CategoryTotal[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ category_id: string | null; total: bigint; count: number }>>`
+      SELECT s.category_id, SUM(s.share)::bigint AS total, COUNT(DISTINCT s.id)::int AS count
+      FROM ${sharesSql(userId, startDay)} s
+      WHERE s.type = ${type} AND s.period_key BETWEEN ${startKey} AND ${endKey}
+      GROUP BY s.category_id
+    `;
+    return rows.map((r) => ({ categoryId: r.category_id, total: r.total, count: r.count }));
   }
 
   async totalsByCategory(
@@ -70,21 +97,16 @@ export class DashboardRepository {
   }
 
   /**
-   * Total per periode keuangan (kunci = bulan tempat periode berakhir) & tipe, dihitung di DB.
+   * Total per periode keuangan (kunci = bulan tempat periode berakhir) & tipe, dengan pembagian biaya, dihitung di DB.
    * Periode tanpa transaksi tidak muncul (diisi 0 di service).
    */
-  async monthlyTotals(userId: string, start: Date, endExclusive: Date, startDay = 1): Promise<MonthlyTotal[]> {
-    const rows = await this.prisma.$queryRaw<Array<{ month: string; type: 'INCOME' | 'EXPENSE'; total: bigint }>>`
-      SELECT ${periodKeySql(startDay)} AS month, type::text AS type, SUM(amount)::bigint AS total
-      FROM transactions
-      WHERE user_id = ${userId}
-        AND status = 'CONFIRMED'
-        AND type IN ('INCOME', 'EXPENSE')
-        AND date >= ${start}::date
-        AND date < ${endExclusive}::date
+  async monthlyTotals(userId: string, firstKey: string, lastKey: string, startDay = 1): Promise<MonthlyTotal[]> {
+    return this.prisma.$queryRaw<MonthlyTotal[]>`
+      SELECT s.period_key AS month, s.type AS type, SUM(s.share)::bigint AS total
+      FROM ${sharesSql(userId, startDay)} s
+      WHERE s.period_key BETWEEN ${firstKey} AND ${lastKey}
       GROUP BY 1, 2
     `;
-    return rows;
   }
 
   /** Pengeluaran CONFIRMED terbesar dalam rentang (untuk insight). */

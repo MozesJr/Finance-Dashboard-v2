@@ -51,6 +51,11 @@ export function AllocationCards({ items }: { items: ReportItemDto[] }) {
                   Sisa {formatMoney(item.remaining)}
                   {item.usedPercent !== null && ` · ${item.usedPercent.toLocaleString('id-ID')}%`}
                 </p>
+                {BigInt(item.reserved) > 0n && (
+                  <p className="mt-1 text-xs text-muted" data-testid="allocation-reserved">
+                    Termasuk cadangan tagihan berkala: {formatMoney(item.reserved)}/periode
+                  </p>
+                )}
               </div>
             </>
           )}

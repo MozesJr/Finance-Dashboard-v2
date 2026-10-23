@@ -5,6 +5,7 @@ import { TransactionsService } from '../../transactions/transactions.service';
 import { BotPendingRepository } from '../bot-pending.repository';
 import { InvestmentHandler } from './handlers/investment.handler';
 import { PaydayHandler } from './handlers/payday.handler';
+import { BillsHandler } from './handlers/bills.handler';
 import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.handler';
 import { ChatHandler } from './handlers/chat.handler';
 import { InputHandler } from './handlers/input.handler';
@@ -28,6 +29,7 @@ export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'undo', description: 'Batalkan transaksi terakhir dari bot' },
   { command: 'batal', description: 'Buang draft yang belum disimpan' },
   { command: 'investasi', description: 'Nilai, modal, untung/rugi investasi' },
+  { command: 'tagihan', description: 'Tagihan berkala & cadangan' },
   { command: 'link', description: 'Hubungkan akun: /link <kode>' },
   { command: 'unlink', description: 'Putuskan akun dari chat ini' },
   { command: 'help', description: 'Bantuan' },
@@ -54,6 +56,7 @@ export class BotCore {
     private insightHandler: InsightHandler,
     private investmentHandler: InvestmentHandler,
     private paydayHandler: PaydayHandler,
+    private billsHandler: BillsHandler,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -121,6 +124,8 @@ export class BotCore {
         return this.reports.tabungan(user);
       case 'investasi':
         return this.investmentHandler.report(user);
+      case 'tagihan':
+        return this.billsHandler.list(user);
       case 'tanya':
         return args.trim() === '' ? [send('Tulis pertanyaannya, mis.: /tanya berapa pengeluaranku bulan ini?')] : this.chatHandler.handle(user, args.trim());
       case 'insight':
@@ -204,6 +209,7 @@ export class BotCore {
     const gate = await this.authenticate(input);
     if (!('userId' in gate)) return gate.map((r) => ({ ...r, mode: 'edit' as const }));
     if (input.data.startsWith('pd:')) return this.paydayHandler.callback(gate, input.data);
+    if (input.data.startsWith('bp:') || input.data.startsWith('bz:')) return this.billsHandler.callback(gate, input.data);
     if (input.data === 'ix' || input.data.startsWith('iv:')) return this.investmentHandler.callback(gate, input.data);
     return this.callbacks.handle(gate, input.data);
   }

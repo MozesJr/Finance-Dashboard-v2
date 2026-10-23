@@ -21,6 +21,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
 import { InsightsModule } from './modules/insights/insights.module';
+import { BillsModule } from './modules/bills/bills.module';
 import { PaydayModule } from './modules/payday/payday.module';
 import { PeriodsModule } from './modules/periods/periods.module';
 import { HealthModule } from './modules/health/health.module';
@@ -41,6 +42,7 @@ import { PrismaModule } from './prisma.module';
     PrismaModule,
     HealthModule,
     PeriodsModule,
+    BillsModule,
     PaydayModule,
     AiModule,
     AuthModule,

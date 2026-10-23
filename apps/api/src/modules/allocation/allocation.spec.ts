@@ -82,7 +82,7 @@ describe('AllocationService', () => {
       getOwnedGoal: jest.fn(),
       netByGoalInRange: jest.fn().mockResolvedValue(new Map()),
     } as unknown as jest.Mocked<SavingsService>;
-    service = new AllocationService(repo, savings, fakePeriods() as never);
+    service = new AllocationService(repo, savings, fakePeriods() as never, { reservePerPeriodByCategory: jest.fn().mockResolvedValue(new Map()) } as never);
   });
 
   describe('report', () => {
@@ -122,9 +122,7 @@ describe('AllocationService', () => {
       expect(byName['Dana Darurat']).toMatchObject({ realized: '1500000', status: 'TERCAPAI', goalId: G_DD });
       expect(byName['Investasi'].status).toBe('BELUM_ADA');
 
-      const [, start, end] = repo.expenseByCategory.mock.calls[0];
-      expect(start.toISOString()).toBe('2026-10-01T00:00:00.000Z');
-      expect(end.toISOString()).toBe('2026-11-01T00:00:00.000Z');
+      expect(repo.expenseByCategory.mock.calls[0]).toEqual(['u1', '2026-10', 1]); // kunci periode + startDay (DB menghitung bagian periode)
       expect(r.totals).toMatchObject({ planned: '10000000', realized: '6600000' });
     });
 

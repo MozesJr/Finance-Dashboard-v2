@@ -44,8 +44,9 @@ const build = (over: { items?: unknown[]; monthlyIncome?: string; done?: string[
     create: jest.fn().mockResolvedValue({ id: 'tx-1' }),
   };
   const periods = fakePeriods(25, new Date('2026-10-28T03:00:00Z')); // periode 2026-11 (25 Okt – 24 Nov)
-  const service = new PaydayService(repo as never, allocation as never, savings as never, transactions as never, periods as never);
-  return { service, repo, allocation, savings, transactions };
+  const bills = { dueInPeriod: jest.fn().mockResolvedValue([]), pay: jest.fn() };
+  const service = new PaydayService(repo as never, allocation as never, savings as never, transactions as never, periods as never, bills as never);
+  return { service, repo, allocation, savings, transactions, bills };
 };
 
 describe('PaydayService.getChecklist', () => {

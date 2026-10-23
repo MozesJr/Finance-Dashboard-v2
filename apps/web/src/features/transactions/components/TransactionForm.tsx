@@ -46,6 +46,7 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
       categoryId: transaction?.categoryId ?? null,
       amount: transaction?.amount ?? '',
       date: transaction?.date ?? toDateString(getTodayInJakarta()),
+      spreadPeriods: transaction?.spreadPeriods ?? 1,
       merchant: transaction?.merchant ?? null,
       note: transaction?.note ?? null,
     },
@@ -85,6 +86,8 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
       categoryId: data.categoryId ?? null,
       amount: data.amount.toString(), // bigint → string untuk JSON
       date: data.date,
+      // Pembagian ke beberapa periode hanya untuk pengeluaran.
+      spreadPeriods: data.type === 'EXPENSE' ? data.spreadPeriods : 1,
       merchant: data.merchant || null,
       note: data.note || null,
       ...(receipt ? { receiptId: receipt.receiptId } : {}),
@@ -165,6 +168,17 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
         <Input id="tx-date" type="date" {...register('date')} />
         <FieldError message={errors.date?.message} />
       </div>
+
+      {type === 'EXPENSE' && (
+        <div>
+          <Label htmlFor="tx-spread">Bagi ke N periode (opsional)</Label>
+          <Input id="tx-spread" type="number" min={1} max={12} step={1} inputMode="numeric" {...register('spreadPeriods', { valueAsNumber: true })} />
+          <p className="mt-1 text-xs text-muted">
+            Untuk biaya besar yang berlaku beberapa periode (mis. asuransi tahunan = 12). Laporan membagi rata, saldo dompet tetap berkurang penuh hari ini.
+          </p>
+          <FieldError message={errors.spreadPeriods?.message} />
+        </div>
+      )}
 
       <div>
         <Label htmlFor="tx-merchant">Toko / sumber (opsional)</Label>

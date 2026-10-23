@@ -15,6 +15,7 @@ const SavingsPage = lazy(() => import('@/features/savings/SavingsPage').then((m)
 const AllocationSettingsPage = lazy(() =>
   import('@/features/savings/AllocationSettingsPage').then((m) => ({ default: m.AllocationSettingsPage })),
 );
+const BillsPage = lazy(() => import('@/features/bills/BillsPage').then((m) => ({ default: m.BillsPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const WalletsPage = lazy(() => import('@/features/wallets/WalletsPage').then((m) => ({ default: m.WalletsPage })));
 const CategoriesPage = lazy(() =>
@@ -52,6 +53,7 @@ export function Router() {
           <Route path="/transaksi" element={<Suspense fallback={<PageFallback />}><TransactionsPage /></Suspense>} />
           <Route path="/tabungan" element={<Suspense fallback={<PageFallback />}><SavingsPage /></Suspense>} />
           <Route path="/tabungan/alokasi" element={<Suspense fallback={<PageFallback />}><AllocationSettingsPage /></Suspense>} />
+          <Route path="/tagihan" element={<Suspense fallback={<PageFallback />}><BillsPage /></Suspense>} />
           <Route path="/pengaturan" element={<Suspense fallback={<PageFallback />}><SettingsPage /></Suspense>} />
 
           {/* Admin routes */}

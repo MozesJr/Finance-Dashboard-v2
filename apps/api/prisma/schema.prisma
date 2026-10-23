@@ -95,21 +95,23 @@ enum ReceiptStatus {
 
 // Models
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  role         Role       @default(USER)
-  status       UserStatus @default(PENDING)
-  approvedAt   DateTime?  @map("approved_at")
-  approvedById String?    @map("approved_by_id")
-  approvedBy   User?      @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvals    User[]     @relation("UserApprovals")
-  periodStartDay Int       @default(1) @map("period_start_day")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id             String     @id @default(uuid())
+  email          String     @unique
+  passwordHash   String     @map("password_hash")
+  role           Role       @default(USER)
+  status         UserStatus @default(PENDING)
+  approvedAt     DateTime?  @map("approved_at")
+  approvedById   String?    @map("approved_by_id")
+  approvedBy     User?      @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvals      User[]     @relation("UserApprovals")
+  periodStartDay Int        @default(1) @map("period_start_day")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
   refreshTokens        RefreshToken[]
   paydayActions        PaydayAction[]
+  bills                Bill[]
+  billPayments         BillPayment[]
   wallets              Wallet[]
   categories           Category[]
   transactions         Transaction[]
@@ -176,6 +178,7 @@ model Wallet {
   transactions Transaction[] @relation("WalletTransactions")
   transfersTo  Transaction[] @relation("TransfersTo")
   savingsGoals SavingsGoal[]
+  bills        Bill[]
 
   @@index([userId])
   @@map("wallets")
@@ -195,6 +198,7 @@ model Category {
   transactions    Transaction[]
   budgets         Budget[]
   recurringRules  RecurringRule[]
+  bills           Bill[]
   merchantRules   MerchantCategoryRule[]
   allocationItems AllocationItemCategory[]
 
@@ -224,6 +228,10 @@ model Transaction {
   receipt             Receipt?             @relation(fields: [receiptId], references: [id], onDelete: SetNull)
   savingsContribution SavingsContribution?
   aiConfidence        Float?               @map("ai_confidence")
+  /// Pembagian biaya (hanya EXPENSE): nominal dibagi rata ke N periode berturut-turut untuk laporan.
+  spreadPeriods       Int                  @default(1) @map("spread_periods")
+  billId              String?              @map("bill_id")
+  bill                Bill?                @relation(fields: [billId], references: [id], onDelete: SetNull)
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
 
@@ -232,6 +240,7 @@ model Transaction {
   @@index([categoryId])
   @@index([userId, status, date])
   @@index([status, createdAt])
+  @@index([billId])
   @@map("transactions")
 }
 
@@ -493,4 +502,64 @@ model PaydayAction {
 
   @@unique([userId, period, itemKey])
   @@map("payday_actions")
+}
+
+/// Tagihan berkala (kos per 3 bulan, asuransi tahunan, ...). Dibayar → transaksi EXPENSE dibagi `intervalMonths` periode.
+model Bill {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  amount         BigInt
+  categoryId     String?   @map("category_id")
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  walletId       String?   @map("wallet_id")
+  wallet         Wallet?   @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  intervalMonths Int       @default(1) @map("interval_months")
+  /// Hari asli jatuh tempo (1–31); dipakai agar 31 Jan → 28 Feb → 31 Mar tidak bergeser.
+  dueDay         Int       @map("due_day")
+  nextDueDate    DateTime  @map("next_due_date") @db.Date
+  isActive       Boolean   @default(true) @map("is_active")
+  remindDays     Int[]     @default([7, 1]) @map("remind_days")
+  snoozedUntil   DateTime? @map("snoozed_until") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  payments     BillPayment[]
+  reminders    BillReminder[]
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([userId, isActive, nextDueDate])
+  @@map("bills")
+}
+
+model BillPayment {
+  id            String   @id @default(uuid())
+  billId        String   @map("bill_id")
+  bill          Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Unik: satu transaksi hanya boleh menyelesaikan satu pembayaran (idempotensi).
+  transactionId String?  @unique @map("transaction_id")
+  amount        BigInt
+  dueDate       DateTime @map("due_date") @db.Date
+  paidOn        DateTime @map("paid_on") @db.Date
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([billId])
+  @@index([userId])
+  @@map("bill_payments")
+}
+
+model BillReminder {
+  id         String   @id @default(uuid())
+  billId     String   @map("bill_id")
+  bill       Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  dueDate    DateTime @map("due_date") @db.Date
+  daysBefore Int      @map("days_before")
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  @@unique([billId, dueDate, daysBefore])
+  @@map("bill_reminders")
 }

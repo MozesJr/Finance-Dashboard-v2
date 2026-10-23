@@ -23,6 +23,9 @@ export interface TransactionResponse {
   source: string;
   receiptId: string | null;
   aiConfidence: number | null;
+  /** Pengeluaran dibagi rata ke N periode untuk laporan (1 = tidak dibagi). */
+  spreadPeriods: number;
+  billId: string | null;
   walletId: string;
   toWalletId: string | null;
   categoryId: string | null;
@@ -50,6 +53,8 @@ export interface DraftInput {
   /** Terisi bila ditebak AI (0..1). */
   aiConfidence?: number | null;
   receiptId?: string | null;
+  spreadPeriods?: number;
+  billId?: string | null;
 }
 
 export interface DraftPatch {
@@ -61,6 +66,8 @@ export interface DraftPatch {
 export interface CreateOptions {
   source?: TxSource;
   status?: TxStatus;
+  /** Transaksi pembayaran tagihan berkala. */
+  billId?: string | null;
 }
 
 const toDate = (s: string) => new Date(`${s}T00:00:00Z`);
@@ -126,6 +133,8 @@ export class TransactionsService {
       date: input.date ? toDate(input.date) : getTodayInJakarta(),
       merchant: input.merchant ?? null,
       note: input.note ?? null,
+      spreadPeriods: input.spreadPeriods ?? 1,
+      billId: options.billId ?? null,
     };
     await this.validate(userId, data);
     await this.assertReceiptUsable(userId, input.receiptId);
@@ -157,6 +166,8 @@ export class TransactionsService {
       date: input.date ? toDate(input.date) : existing.date,
       merchant: input.merchant !== undefined ? input.merchant : existing.merchant,
       note: input.note !== undefined ? input.note : existing.note,
+      // Bila tipe diubah menjadi non-pengeluaran, pembagian otomatis kembali ke 1 periode.
+      spreadPeriods: (input.type ?? existing.type) === 'EXPENSE' ? (input.spreadPeriods ?? existing.spreadPeriods) : (input.spreadPeriods ?? 1),
     };
     await this.validate(userId, merged, existing);
     await this.repository.update(userId, id, merged);
@@ -176,6 +187,8 @@ export class TransactionsService {
       date: toDate(input.date),
       merchant: input.merchant ?? null,
       note: input.note ?? null,
+      spreadPeriods: input.spreadPeriods ?? 1,
+      billId: input.billId ?? null,
     };
     await this.validate(userId, data, undefined, { allowNoCategory: true });
     await this.assertReceiptUsable(userId, input.receiptId);
@@ -291,7 +304,7 @@ export class TransactionsService {
     if (data.type === 'ADJUSTMENT') {
       throw new ConflictException('Penyesuaian nilai pasar tidak bisa diubah. Hapus lalu perbarui nilai lagi dari halaman Dompet.');
     }
-    const problem = checkTransactionShape({ ...data, type: data.type });
+    const problem = checkTransactionShape({ ...data, type: data.type, spreadPeriods: data.spreadPeriods });
     const skippable = options.allowNoCategory && problem?.field === 'categoryId' && !data.categoryId;
     if (problem && !skippable) throw new BadRequestException(problem.message);
     if (data.amount <= 0n) throw new BadRequestException('Nominal harus lebih dari 0');
@@ -326,6 +339,8 @@ function toResponse(tx: TransactionWithRelations): TransactionResponse {
     source: tx.source,
     receiptId: tx.receiptId,
     aiConfidence: tx.aiConfidence,
+    spreadPeriods: tx.spreadPeriods,
+    billId: tx.billId,
     walletId: tx.walletId,
     toWalletId: tx.toWalletId,
     categoryId: tx.categoryId,

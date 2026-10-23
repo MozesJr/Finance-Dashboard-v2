@@ -13,6 +13,9 @@ export interface TransactionDto {
   source: string;
   receiptId: string | null;
   aiConfidence: number | null;
+  /** Pengeluaran dibagi rata ke N periode untuk laporan (1 = tidak dibagi). */
+  spreadPeriods: number;
+  billId: string | null;
   walletId: string;
   toWalletId: string | null;
   categoryId: string | null;
@@ -43,6 +46,7 @@ export interface TransactionPayload {
   categoryId?: string | null;
   amount?: string;
   date?: string;
+  spreadPeriods?: number;
   merchant?: string | null;
   note?: string | null;
   /** Struk hasil unggahan yang dilampirkan. */

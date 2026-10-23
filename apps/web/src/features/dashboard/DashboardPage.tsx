@@ -5,6 +5,7 @@ import { InsightPanel } from '@/features/insights/InsightPanel';
 import { EmergencyWidget } from './components/EmergencyWidget';
 import { CategoryBreakdown } from './components/CategoryBreakdown';
 import { usePeriodSelection } from '@/features/settings/hooks';
+import { BillsCard } from './components/BillsCard';
 import { MonthPicker } from './components/MonthPicker';
 import { SummaryCards, SummaryCardsSkeleton } from './components/SummaryCards';
 import { TrendChart } from './components/TrendChart';
@@ -28,6 +29,7 @@ export function DashboardPage() {
       ) : (
         <SummaryCards data={data} />
       )}
+      <BillsCard />
       <InsightPanel month={month} />
       <EmergencyWidget />
       <div className="grid gap-6 xl:grid-cols-2">

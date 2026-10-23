@@ -3,7 +3,7 @@ import type { PeriodInfo } from 'shared';
 
 export interface ChecklistItemDto {
   key: string;
-  kind: 'SAVING' | 'EXPENSE_SINGLE' | 'EXPENSE_INFO' | 'INCOME';
+  kind: 'SAVING' | 'EXPENSE_SINGLE' | 'EXPENSE_INFO' | 'INCOME' | 'BILL';
   name: string;
   icon: string | null;
   amount: string;
@@ -13,6 +13,8 @@ export interface ChecklistItemDto {
   needsDestination?: boolean;
   categoryId?: string;
   planIncome?: string;
+  billId?: string;
+  dueDate?: string;
 }
 
 export interface ChecklistDto {

@@ -11,3 +11,4 @@ export * from './allocation';
 export * from './ai';
 export * from './settings';
 export * from './payday';
+export * from './bills';

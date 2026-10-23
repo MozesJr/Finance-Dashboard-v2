@@ -154,9 +154,7 @@ describe('SavingsService', () => {
       try {
         repo.findGoals.mockResolvedValue([goal({ targetMode: 'MONTHS_OF_EXPENSE', targetAmount: null, targetMonths: 6 })] as never);
         await service.list('u1');
-        const [, start, end] = repo.monthlyExpenseTotals.mock.calls[0];
-        expect(start.toISOString()).toBe('2026-07-01T00:00:00.000Z');
-        expect(end.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+        expect(repo.monthlyExpenseTotals.mock.calls[0]).toEqual(['u1', '2026-07', '2026-09', 1]); // 3 periode penuh sebelum periode berjalan (2026-10)
       } finally {
         jest.useRealTimers();
       }

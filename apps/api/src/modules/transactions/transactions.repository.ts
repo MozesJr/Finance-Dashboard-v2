@@ -35,6 +35,8 @@ export interface TransactionWriteData {
   date: Date;
   merchant: string | null;
   note: string | null;
+  spreadPeriods?: number;
+  billId?: string | null;
 }
 
 @Injectable()

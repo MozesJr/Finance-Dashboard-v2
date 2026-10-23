@@ -12,7 +12,7 @@ export const HELP_TEXT = [
   'Insight bulanan: /insight',
   'Investasi: /investasi · perbarui nilai: update ipot 8,7jt',
   '',
-  '/saldo /hariini /bulanini /alokasi /tabungan /investasi',
+  '/saldo /hariini /bulanini /alokasi /tabungan /investasi /tagihan',
   '/undo /batal /unlink /help',
 ].join('\n');
 

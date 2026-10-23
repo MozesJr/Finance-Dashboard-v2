@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DateStringSchema, formatMoneyId, MonthStringSchema } from 'shared';
 import { AllocationService } from '../allocation/allocation.service';
 import type { ToolDefinition } from '../ai/llm-client.service';
+import { BillsService } from '../bills/bills.service';
 import { CategoriesService } from '../categories/categories.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { SavingsService } from '../savings/savings.service';
@@ -71,6 +72,11 @@ export const CHAT_TOOLS: ToolDefinition[] = [
   },
   { name: 'get_wallet_balances', description: 'Saldo setiap dompet aktif dan totalnya.', parameters: { type: 'object', properties: {} } },
   {
+    name: 'get_bills',
+    description: 'Tagihan berkala aktif: nominal, interval, jatuh tempo, cadangan seharusnya, dan "uang bebas" (saldo dompet default dikurangi cadangan).',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
     name: 'get_investments',
     description: 'Nilai terkini, modal, dan untung/rugi belum direalisasi per dompet investasi, beserta total. Penyesuaian nilai pasar BUKAN pemasukan/pengeluaran.',
     parameters: { type: 'object', properties: {} },
@@ -93,6 +99,7 @@ export class ChatToolsService {
     private savings: SavingsService,
     private allocation: AllocationService,
     private categories: CategoriesService,
+    private bills: BillsService,
   ) {}
 
   /** Mengembalikan string JSON (maks. ~6000 karakter). Error dikembalikan sebagai {"error": "..."} agar model bisa menjelaskan. */
@@ -116,6 +123,9 @@ export class ChatToolsService {
         case 'get_wallet_balances':
           NoArgs.parse(args);
           return this.out(await this.walletBalances(userId));
+        case 'get_bills':
+          NoArgs.parse(args);
+          return this.out(await this.billsOverview(userId));
         case 'get_investments':
           NoArgs.parse(args);
           return this.out(await this.investments(userId));
@@ -174,6 +184,25 @@ export class ChatToolsService {
     const r = await this.dashboard.trend(userId, { months: a.months ?? 6 });
     return {
       months: r.months.map((m) => ({ period: m.month, periodLabel: m.label, incomeFormatted: rp(m.income), expenseFormatted: rp(m.expense), netFormatted: rp(m.net) })),
+    };
+  }
+
+  private async billsOverview(userId: string) {
+    const o = await this.bills.overview(userId);
+    return {
+      bills: o.bills.slice(0, 10).map((b) => ({
+        name: b.name,
+        amountFormatted: rp(b.amount),
+        everyMonths: b.intervalMonths,
+        nextDueDate: b.nextDueDate,
+        daysUntilDue: b.daysUntilDue,
+        reservePerPeriodFormatted: rp(b.reservePerPeriod),
+        accumulatedReserveFormatted: rp(b.accumulated),
+      })),
+      totalReserveFormatted: rp(o.totalReserve),
+      totalPerPeriodFormatted: rp(o.totalPerPeriod),
+      defaultWallet: o.defaultWallet?.name ?? null,
+      freeMoneyFormatted: o.freeMoney === null ? null : rp(o.freeMoney),
     };
   }
 

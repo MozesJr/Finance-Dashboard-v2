@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { AllocationKind } from '@prisma/client';
 import { getPeriodRange, periodLabel, splitByPercent, toDateString } from 'shared';
 import type { PeriodInfo } from 'shared';
+import { BillsService } from '../bills/bills.service';
 import { PeriodsService } from '../periods/periods.service';
 import { percentOf } from '../../common/percent';
 import { GoalResponse, SavingsService } from '../savings/savings.service';
@@ -46,6 +47,8 @@ export interface ReportItem {
   categoryIds: string[];
   /** Pos tabungan 0%: sudah selesai / dialihkan. */
   dialihkan: boolean;
+  /** Cadangan per periode untuk tagihan berkala yang kategorinya termasuk pos ini (sudah termasuk dalam realisasi saat dibayar). */
+  reserved: string;
   planned: string;
   realized: string;
   /** Sisa anggaran/target (tidak negatif). */
@@ -89,6 +92,7 @@ export class AllocationService {
     private repository: AllocationRepository,
     private savings: SavingsService,
     private periods: PeriodsService,
+    private bills: BillsService,
   ) {}
 
   async getPlan(userId: string): Promise<{ plan: PlanResponse | null }> {
@@ -104,9 +108,10 @@ export class AllocationService {
     const { start, endExclusive } = getPeriodRange(month, startDay);
 
     const phaseItems = plan.items.filter((i) => i.phase === phase);
+    const reserveByCategory = await this.bills.reservePerPeriodByCategory(userId);
     const [planned, expenseByCategory, netByGoal, goals] = await Promise.all([
       Promise.resolve(splitByPercent(plan.monthlyIncome, phaseItems.map((i) => ({ percent: i.percent, sortOrder: i.sortOrder })))),
-      this.repository.expenseByCategory(userId, start, endExclusive),
+      this.repository.expenseByCategory(userId, month, startDay),
       this.savings.netByGoalInRange(userId, start, endExclusive),
       this.savings.list(userId, true),
     ]);
@@ -133,6 +138,7 @@ export class AllocationService {
         goalName: item.linkedGoalId ? (goalById.get(item.linkedGoalId)?.name ?? null) : null,
         categoryIds: item.categories.map((c) => c.categoryId),
         dialihkan: item.kind === 'SAVING' && item.percent === 0,
+        reserved: (item.kind === 'EXPENSE' ? item.categories.reduce((acc, c) => acc + (reserveByCategory.get(c.categoryId) ?? 0n), 0n) : 0n).toString(),
         planned: plannedAmount.toString(),
         realized: realized.toString(),
         remaining: remaining.toString(),

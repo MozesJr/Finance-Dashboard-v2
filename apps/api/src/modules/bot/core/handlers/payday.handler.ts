@@ -43,6 +43,10 @@ export function renderChecklist(c: Checklist, footer?: string): OutgoingMessage 
       case 'EXPENSE_INFO':
         lines.push(`ℹ️ ${label}: anggaran ${rp(item.amount)} (beberapa kategori)`);
         break;
+      case 'BILL':
+        lines.push(`${item.done ? '✅' : '•'} 🧾 ${item.name}: ${rp(item.amount)} (jatuh tempo ${item.dueDate ?? ''})`);
+        buttons.push([{ text: item.done ? '✅ Sudah' : `Bayar ${item.name} ${rp(item.amount)}`, data }]);
+        break;
       case 'INCOME':
         lines.push(`${item.done ? '✅' : '⚠️'} Gaji di alokasi ${rp(item.planIncome ?? '0')} ≠ gaji diterima ${rp(item.amount)}`);
         buttons.push([{ text: item.done ? '✅ Sudah' : `Perbarui gaji di alokasi ke ${rp(item.amount)}`, data }]);

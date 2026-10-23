@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AllocationKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { sharesSql } from '../periods/periods.repository';
 
 const PLAN_INCLUDE = {
   items: {
@@ -82,13 +83,14 @@ export class AllocationRepository {
     return rows.map((r) => r.id);
   }
 
-  /** Total pengeluaran CONFIRMED per kategori dalam rentang tanggal (agregasi DB). */
-  async expenseByCategory(userId: string, start: Date, endExclusive: Date): Promise<Map<string, bigint>> {
-    const groups = await this.prisma.transaction.groupBy({
-      by: ['categoryId'],
-      where: { userId, status: 'CONFIRMED', type: 'EXPENSE', date: { gte: start, lt: endExclusive }, categoryId: { not: null } },
-      _sum: { amount: true },
-    });
-    return new Map(groups.map((g) => [g.categoryId as string, g._sum.amount ?? 0n]));
+  /** Total pengeluaran CONFIRMED per kategori untuk satu periode keuangan, dengan pembagian biaya (agregasi DB). */
+  async expenseByCategory(userId: string, periodKey: string, startDay: number): Promise<Map<string, bigint>> {
+    const rows = await this.prisma.$queryRaw<Array<{ category_id: string; total: bigint }>>`
+      SELECT s.category_id, SUM(s.share)::bigint AS total
+      FROM ${sharesSql(userId, startDay)} s
+      WHERE s.type = 'EXPENSE' AND s.category_id IS NOT NULL AND s.period_key = ${periodKey}
+      GROUP BY s.category_id
+    `;
+    return new Map(rows.map((r) => [r.category_id, r.total]));
   }
 }

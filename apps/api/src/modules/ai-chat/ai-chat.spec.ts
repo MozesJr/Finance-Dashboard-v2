@@ -28,14 +28,15 @@ const buildTools = () => {
   const savings = { list: jest.fn().mockResolvedValue([{ name: 'Dana Darurat', type: 'EMERGENCY', collected: '1800000', target: '1500000', percent: 120, remaining: '0', estimatedMonths: 0 }]) };
   const allocation = { report: jest.fn().mockResolvedValue({ month: '2026-10', period: { label: 'Okt 2026' }, phase: 1, monthlyIncome: '10000000', items: [{ name: 'Kebutuhan', percent: 45, planned: '4500000', realized: '1252500', remaining: '3247500', status: 'AMAN' }] }) };
   const categories = { list: jest.fn().mockResolvedValue([{ id: 'cat-makan', name: 'Makan & Minum' }, { id: 'cat-trans', name: 'Transportasi' }]) };
-  const tools = new ChatToolsService(dashboard as never, transactions as never, wallets as never, savings as never, allocation as never, categories as never);
-  return { tools, dashboard, transactions, wallets, savings, allocation, categories };
+  const bills = { overview: jest.fn() };
+  const tools = new ChatToolsService(dashboard as never, transactions as never, wallets as never, savings as never, allocation as never, categories as never, bills as never);
+  return { tools, dashboard, transactions, wallets, savings, allocation, categories, bills };
 };
 
 describe('CHAT_TOOLS (definisi)', () => {
-  it('8 tool yang diminta; tidak ada parameter userId di mana pun', () => {
+  it('9 tool yang diminta; tidak ada parameter userId di mana pun', () => {
     expect(CHAT_TOOLS.map((t) => t.name)).toEqual([
-      'get_summary', 'get_spending_by_category', 'get_trend', 'search_transactions', 'get_wallet_balances', 'get_investments', 'get_savings_status', 'get_allocation',
+      'get_summary', 'get_spending_by_category', 'get_trend', 'search_transactions', 'get_wallet_balances', 'get_bills', 'get_investments', 'get_savings_status', 'get_allocation',
     ]);
     expect(JSON.stringify(CHAT_TOOLS).toLowerCase()).not.toContain('userid');
   });

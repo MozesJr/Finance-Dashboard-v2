@@ -1,4 +1,4 @@
-import { getCurrentPeriod, getPeriodRange, periodLabel } from 'shared';
+import { getCurrentPeriod, getPeriodKey, getPeriodRange, periodLabel } from 'shared';
 
 /** PeriodsService palsu untuk spec: memakai util shared yang asli, startDay tetap. */
 export function fakePeriods(startDay = 1, now?: Date) {
@@ -11,5 +11,6 @@ export function fakePeriods(startDay = 1, now?: Date) {
     resolve,
     current: jest.fn(async () => getCurrentPeriod(startDay, now)),
     startDay: jest.fn(async () => startDay),
+    keyForDate: (date: Date | string, sd: number) => getPeriodKey(date, sd),
   };
 }
