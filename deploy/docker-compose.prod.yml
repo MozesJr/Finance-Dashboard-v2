@@ -20,7 +20,7 @@ services:
     networks: [internal, master_db_net]
     volumes:
       - receipts:/data/receipts
-    mem_limit: 512m
+    mem_limit: 1g
     cpus: 1.0
     init: true
     stop_grace_period: 20s
@@ -58,7 +58,7 @@ services:
     env_file: .env.prod
     networks: [master_db_net]
     command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
-    mem_limit: 512m
+    mem_limit: 1g
 
   # Buat admin / nonaktifkan admin lama (lihat docs/DEPLOY.md langkah 10):
   #   ... --profile tools run --rm -e NEW_ADMIN_EMAIL=... -e NEW_ADMIN_PASSWORD=... create-admin
@@ -74,7 +74,7 @@ services:
     volumes:
       - ./create-admin.ts:/repo/apps/api/deploy/create-admin.ts:ro
     entrypoint: ["./node_modules/.bin/ts-node", "deploy/create-admin.ts"]
-    mem_limit: 512m
+    mem_limit: 1g
 
 networks:
   internal:
