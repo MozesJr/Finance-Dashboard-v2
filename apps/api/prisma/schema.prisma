@@ -72,6 +72,18 @@ enum CategoryType {
   EXPENSE
 }
 
+enum AiFeature {
+  CHAT
+  INSIGHT
+  RECEIPT
+  PARSE
+}
+
+enum AiChatRole {
+  USER
+  ASSISTANT
+}
+
 enum ReceiptStatus {
   PENDING
   PARSED
@@ -108,6 +120,8 @@ model User {
   telegramLinkCodes    TelegramLinkCode[]
   auditLogsAsAdmin     AuditLog[]             @relation("AdminAuditLogs")
   BotPendingInput      BotPendingInput[]
+  AiUsage              AiUsage[]
+  AiChatMessage        AiChatMessage[]
 
   @@index([approvedById])
   @@map("users")
@@ -221,6 +235,8 @@ model Receipt {
   userId     String        @map("user_id")
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   filePath   String        @map("file_path")
+  mimeType   String        @map("mime_type")
+  sizeBytes  Int           @map("size_bytes")
   ocrText    String?       @map("ocr_text")
   parsedJson Json?         @map("parsed_json")
   status     ReceiptStatus @default(PENDING)
@@ -376,6 +392,35 @@ model MerchantCategoryRule {
   @@index([userId])
   @@index([categoryId])
   @@map("merchant_category_rules")
+}
+
+/// Pemakaian LLM per permintaan user (tanpa isi prompt/respons).
+model AiUsage {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature          AiFeature
+  promptTokens     Int       @default(0) @map("prompt_tokens")
+  completionTokens Int       @default(0) @map("completion_tokens")
+  latencyMs        Int       @default(0) @map("latency_ms")
+  success          Boolean
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, feature, createdAt])
+  @@map("ai_usage")
+}
+
+/// Riwayat percakapan chat AI (hanya teks user/asisten).
+model AiChatMessage {
+  id        String     @id @default(uuid())
+  userId    String     @map("user_id")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AiChatRole
+  content   String
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("ai_chat_messages")
 }
 
 model AiInsight {
