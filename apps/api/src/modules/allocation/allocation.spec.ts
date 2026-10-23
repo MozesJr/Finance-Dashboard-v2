@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { allocationStatus, AllocationService } from './allocation.service';
 import { AllocationRepository } from './allocation.repository';
 import { SavingsService } from '../savings/savings.service';
+import { fakePeriods } from '../periods/periods.testing';
 
 const G_DD = '11111111-1111-4111-8111-111111111111';
 const G_INV = '22222222-2222-4222-8222-222222222222';
@@ -81,7 +82,7 @@ describe('AllocationService', () => {
       getOwnedGoal: jest.fn(),
       netByGoalInRange: jest.fn().mockResolvedValue(new Map()),
     } as unknown as jest.Mocked<SavingsService>;
-    service = new AllocationService(repo, savings);
+    service = new AllocationService(repo, savings, fakePeriods() as never);
   });
 
   describe('report', () => {

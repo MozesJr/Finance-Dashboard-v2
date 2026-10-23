@@ -104,10 +104,12 @@ model User {
   approvedById String?    @map("approved_by_id")
   approvedBy   User?      @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvals    User[]     @relation("UserApprovals")
+  periodStartDay Int       @default(1) @map("period_start_day")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   refreshTokens        RefreshToken[]
+  paydayActions        PaydayAction[]
   wallets              Wallet[]
   categories           Category[]
   transactions         Transaction[]
@@ -478,4 +480,17 @@ model TelegramLinkCode {
   @@index([userId])
   @@index([codeHash])
   @@map("telegram_link_codes")
+}
+
+/// Aksi checklist gajian yang sudah dijalankan (idempotensi tombol bot/web).
+model PaydayAction {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period    String // kunci periode YYYY-MM
+  itemKey   String   @map("item_key")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, period, itemKey])
+  @@map("payday_actions")
 }

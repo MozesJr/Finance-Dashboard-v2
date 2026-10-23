@@ -49,6 +49,11 @@ export class TelegramLinkService {
     return { code, expiresAt, botUsername: this.botInfo.username };
   }
 
+  /** Chat Telegram yang terhubung ke user (null bila belum terhubung). */
+  async getChatId(userId: string): Promise<string | null> {
+    return (await this.repository.findByUser(userId))?.chatId ?? null;
+  }
+
   async unlink(userId: string): Promise<void> {
     await this.repository.deleteByUser(userId);
   }

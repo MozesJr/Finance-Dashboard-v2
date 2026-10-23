@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { extractRupiahAmounts, getCurrentMonthJakarta, getTodayInJakarta, toDateString, validateNarrativeNumbers } from 'shared';
+import { extractRupiahAmounts, getTodayInJakarta, toDateString, validateNarrativeNumbers } from 'shared';
 import { AiUsageService } from '../ai/ai-usage.service';
 import { LlmClient, LlmMessage } from '../ai/llm-client.service';
+import { PeriodsService } from '../periods/periods.service';
 import { PromptService } from '../ai/prompt.service';
 import { AiChatRepository } from './ai-chat.repository';
 import { CHAT_TOOLS, ChatToolsService } from './chat-tools.service';
@@ -42,16 +43,18 @@ export class AiChatService {
     private usage: AiUsageService,
     private tools: ChatToolsService,
     private repository: AiChatRepository,
+    private periods: PeriodsService,
   ) {}
 
   /** Satu pertanyaan = satu permintaan AI (kuota CHAT). Tool dipanggil server dengan userId dari JWT/chat tertaut. */
   ask(userId: string, message: string): Promise<ChatAnswer> {
     return this.usage.track(userId, 'CHAT', async (meter) => {
       const history = await this.repository.recent(userId, HISTORY_LIMIT);
+      const period = await this.periods.current(userId);
       const messages: LlmMessage[] = [
         {
           role: 'system',
-          content: this.prompts.get('chat-system', { today: toDateString(getTodayInJakarta()), month: getCurrentMonthJakarta() }),
+          content: this.prompts.get('chat-system', { today: toDateString(getTodayInJakarta()), period: period.label, periodKey: period.key }),
         },
         ...history.map((h): LlmMessage => ({ role: h.role === 'USER' ? 'user' : 'assistant', content: truncate(h.content, HISTORY_CHARS) })),
         { role: 'user', content: message },

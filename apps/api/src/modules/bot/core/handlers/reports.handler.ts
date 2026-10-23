@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { formatMoneyId, getCurrentMonthJakarta, getMonthRange, getTodayInJakarta, toDateString } from 'shared';
+import { formatMoneyId, getTodayInJakarta, toDateString } from 'shared';
+import { PeriodsService } from '../../../periods/periods.service';
 import { AllocationService } from '../../../allocation/allocation.service';
 import { DashboardService } from '../../../dashboard/dashboard.service';
 import { SavingsService } from '../../../savings/savings.service';
@@ -24,6 +25,7 @@ export class ReportsHandler {
     private dashboard: DashboardService,
     private savings: SavingsService,
     private allocation: AllocationService,
+    private periods: PeriodsService,
   ) {}
 
   async saldo(user: BotUser): Promise<BotReply[]> {
@@ -44,9 +46,8 @@ export class ReportsHandler {
   }
 
   async bulanIni(user: BotUser): Promise<BotReply[]> {
-    const month = getCurrentMonthJakarta();
-    const { start, endExclusive } = getMonthRange(month);
-    return this.period(user, `📅 Bulan ini (${month})`, start, endExclusive);
+    const p = await this.periods.current(user.userId);
+    return this.period(user, `📅 Periode ini: ${p.label}`, p.start, p.endExclusive);
   }
 
   private async period(user: BotUser, title: string, start: Date, endExclusive: Date): Promise<BotReply[]> {
@@ -69,7 +70,7 @@ export class ReportsHandler {
   async alokasi(user: BotUser): Promise<BotReply[]> {
     try {
       const r = await this.allocation.report(user.userId, {});
-      const lines = [`📊 Alokasi ${r.month} · Fase ${r.phase}`];
+      const lines = [`📊 Alokasi ${r.period.label} · Fase ${r.phase}`];
       for (const item of r.items.slice(0, MAX_LINES - 1)) {
         lines.push(
           item.dialihkan

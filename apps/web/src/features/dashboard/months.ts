@@ -12,3 +12,12 @@ export function fullMonthLabel(month: string): string {
   const [y, m] = month.split('-');
   return `${FULL[Number(m) - 1]} ${y}`;
 }
+
+/** ("2026-10-25", "2026-11-24") → "25 Okt – 24 Nov" */
+export function shortRangeLabel(start: string, end: string): string {
+  const fmt = (iso: string) => {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${d} ${MONTHS[m - 1]}`;
+  };
+  return `${fmt(start)} – ${fmt(end)}`;
+}

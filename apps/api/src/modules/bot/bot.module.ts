@@ -19,6 +19,10 @@ import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
 import { ChatHandler } from './core/handlers/chat.handler';
 import { InputHandler } from './core/handlers/input.handler';
 import { InvestmentHandler } from './core/handlers/investment.handler';
+import { PaydayHandler } from './core/handlers/payday.handler';
+import { PaydayModule } from '../payday/payday.module';
+import { BotNotifier, DevOutbox } from './bot-notifier';
+import { PaydayNotifier } from './payday-notifier';
 import { InsightHandler } from './core/handlers/insight.handler';
 import { ReceiptHandler } from './core/handlers/receipt.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
@@ -41,6 +45,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     ReceiptsModule,
     AiChatModule,
     InsightsModule,
+    PaydayModule,
   ],
   controllers: [TelegramWebhookController, ...devControllers],
   providers: [
@@ -51,11 +56,15 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     ChatHandler,
     InsightHandler,
     InvestmentHandler,
+    PaydayHandler,
     DraftCallbackHandler,
     ReportsHandler,
     BotPendingRepository,
     TelegramBotService,
     BotJobsService,
+    DevOutbox,
+    BotNotifier,
+    PaydayNotifier,
   ],
   exports: [LinkLockout],
 })

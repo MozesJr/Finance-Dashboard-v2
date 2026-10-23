@@ -7,10 +7,12 @@ import { BotCore } from './bot-core.service';
 import { ChatHandler } from './handlers/chat.handler';
 import { InsightHandler } from './handlers/insight.handler';
 import { InvestmentHandler } from './handlers/investment.handler';
+import { PaydayHandler } from './handlers/payday.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
 import { InputHandler } from './handlers/input.handler';
+import { fakePeriods } from '../../periods/periods.testing';
 import { ReportsHandler } from './handlers/reports.handler';
 import { FakeChannelAdapter } from './testing/fake-channel.adapter';
 
@@ -60,7 +62,7 @@ const CATEGORIES = [
   { id: 'cat-income-gaji', name: 'Gaji', icon: '💼', type: 'INCOME' },
 ];
 
-function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[] } = {}) {
+function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[]; startDay?: number } = {}) {
   const wallets = (options.wallets ?? WALLETS).map((w) => ({ ...w, isDefault: w.id === options.defaultWallet }));
   const txs: FakeTx[] = [];
   const rules: Array<{ userId: string; pattern: string; categoryId: string }> = [];
@@ -243,6 +245,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[] } 
   const allocation = {
     report: jest.fn(async () => ({
       month: '2026-10',
+      period: { key: '2026-10', label: 'Okt 2026' },
       phase: 1,
       suggestPhase2: true,
       items: [{ icon: '🏠', name: 'Kebutuhan Primer', dialihkan: false, realized: '1217500', planned: '4500000', status: 'AMAN' }],
@@ -290,12 +293,15 @@ function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[] } 
       narrative: { summary: 'Ringkasan Oktober.', findings: ['Temuan satu', 'Temuan dua', 'Temuan tiga'], suggestions: ['Saran satu', 'Saran dua', 'Saran tiga'] },
     })),
   };
-  const insightHandler = new InsightHandler(insightSvc as never);
+  const periodsSvc = fakePeriods(options.startDay ?? 1);
+  const insightHandler = new InsightHandler(insightSvc as never, periodsSvc as never);
   const receiptHandler = new ReceiptHandler(receiptsSvc as never, transactions as never, walletsService as never, pending as never);
-  const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
+  const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never, periodsSvc as never);
   const lockout = new LinkLockout();
   const investmentHandler = new InvestmentHandler(walletsService as never);
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler, investmentHandler);
+  const paydaySvc = { getChecklist: jest.fn(async () => null), runAction: jest.fn() };
+  const paydayHandler = new PaydayHandler(paydaySvc as never, transactions as never, walletsService as never);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler, investmentHandler, paydayHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -1190,6 +1196,15 @@ describe('BotCore', () => {
       expect(msg.text).toContain('GoPay: Rp150.000');
       expect(msg.text).toContain('Total: Rp6.450.000');
       expect(msg.text.split('\n').length).toBeLessThanOrEqual(10);
+    });
+
+    it('/bulanini: "Periode ini" dengan rentang gajian; dashboard dipanggil dengan rentang periode', async () => {
+      const w = buildWorld({ startDay: 25 });
+      const [msg] = await w.chat('c1', 'u1').say('/bulanini');
+      expect(msg.text).toMatch(/^📅 Periode ini: \w{3} \d{4} \(25 \w{3} – 24 \w{3}\)/);
+      const [, start, end] = w.dashboard.period.mock.calls[0] as unknown as [string, Date, Date];
+      expect(start.getUTCDate()).toBe(25);
+      expect(end.getUTCDate()).toBe(25);
     });
 
     it('/hariini, /bulanini, /alokasi, /tabungan: ringkas (≤10 baris) dan Rupiah', async () => {

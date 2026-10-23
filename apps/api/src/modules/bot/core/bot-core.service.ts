@@ -4,6 +4,7 @@ import { TelegramLinkService } from '../../telegram-link/telegram-link.service';
 import { TransactionsService } from '../../transactions/transactions.service';
 import { BotPendingRepository } from '../bot-pending.repository';
 import { InvestmentHandler } from './handlers/investment.handler';
+import { PaydayHandler } from './handlers/payday.handler';
 import { DraftCallbackHandler, UNDO_WINDOW_MS } from './handlers/draft-callback.handler';
 import { ChatHandler } from './handlers/chat.handler';
 import { InputHandler } from './handlers/input.handler';
@@ -52,6 +53,7 @@ export class BotCore {
     private chatHandler: ChatHandler,
     private insightHandler: InsightHandler,
     private investmentHandler: InvestmentHandler,
+    private paydayHandler: PaydayHandler,
   ) {}
 
   async handle(input: BotInput): Promise<BotReply[]> {
@@ -201,6 +203,7 @@ export class BotCore {
   private async handleCallback(input: Extract<BotInput, { kind: 'callback' }>): Promise<BotReply[]> {
     const gate = await this.authenticate(input);
     if (!('userId' in gate)) return gate.map((r) => ({ ...r, mode: 'edit' as const }));
+    if (input.data.startsWith('pd:')) return this.paydayHandler.callback(gate, input.data);
     if (input.data === 'ix' || input.data.startsWith('iv:')) return this.investmentHandler.callback(gate, input.data);
     return this.callbacks.handle(gate, input.data);
   }

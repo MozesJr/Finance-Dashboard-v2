@@ -69,6 +69,37 @@ describe('TransactionsService', () => {
     expect(res).not.toHaveProperty('userId');
   });
 
+  it('event: transaksi CONFIRMED baru (create) memberi tahu pendengar; DRAFT tidak; confirmDraft memberi tahu sekali', async () => {
+    const events = { emitConfirmed: jest.fn().mockResolvedValue(undefined) };
+    const svc = new TransactionsService(repo, wallets, categories, events as never);
+    repo.create.mockResolvedValueOnce(row({ status: 'CONFIRMED' }) as never);
+    await svc.create('u1', parse({ type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000 }));
+    expect(events.emitConfirmed).toHaveBeenCalledTimes(1);
+    expect(events.emitConfirmed).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 't1', status: 'CONFIRMED' }));
+
+    events.emitConfirmed.mockClear();
+    repo.create.mockResolvedValueOnce(row({ status: 'DRAFT' }) as never);
+    await svc.create('u1', parse({ type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000 }), { status: 'DRAFT' });
+    expect(events.emitConfirmed).not.toHaveBeenCalled();
+
+    repo.findById.mockResolvedValueOnce(row({ status: 'DRAFT' }) as never).mockResolvedValue(row({ status: 'CONFIRMED' }) as never);
+    await svc.confirmDraft('u1', 't1');
+    expect(events.emitConfirmed).toHaveBeenCalledTimes(1);
+    await svc.confirmDraft('u1', 't1'); // sudah CONFIRMED → tidak diumumkan lagi
+    expect(events.emitConfirmed).toHaveBeenCalledTimes(1);
+  });
+
+  it('pendengar yang gagal tidak menggagalkan penyimpanan', async () => {
+    const { TransactionEvents } = await import('./transaction-events');
+    const events = new TransactionEvents();
+    events.onConfirmed(() => {
+      throw new Error('listener rusak');
+    });
+    const svc = new TransactionsService(repo, wallets, categories, events);
+    repo.create.mockResolvedValue(row() as never);
+    await expect(svc.create('u1', parse({ type: 'EXPENSE', walletId: W1, categoryId: 'cat-expense-makan', amount: 1000 }))).resolves.toMatchObject({ id: 't1' });
+  });
+
   it('create: tipe kategori tidak cocok → 400', async () => {
     categories.getVisible.mockResolvedValue({ id: 'cat-income-gaji', type: 'INCOME' } as never);
     await expect(

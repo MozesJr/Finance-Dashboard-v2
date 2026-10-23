@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CategoryType } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
+import { periodKeySql } from '../periods/periods.repository';
 
 export interface CategoryTotal {
   categoryId: string | null;
@@ -68,10 +69,13 @@ export class DashboardRepository {
     });
   }
 
-  /** Total per bulan & tipe. Bulan tanpa transaksi tidak muncul (diisi 0 di service). */
-  async monthlyTotals(userId: string, start: Date, endExclusive: Date): Promise<MonthlyTotal[]> {
+  /**
+   * Total per periode keuangan (kunci = bulan tempat periode berakhir) & tipe, dihitung di DB.
+   * Periode tanpa transaksi tidak muncul (diisi 0 di service).
+   */
+  async monthlyTotals(userId: string, start: Date, endExclusive: Date, startDay = 1): Promise<MonthlyTotal[]> {
     const rows = await this.prisma.$queryRaw<Array<{ month: string; type: 'INCOME' | 'EXPENSE'; total: bigint }>>`
-      SELECT to_char(date, 'YYYY-MM') AS month, type::text AS type, SUM(amount)::bigint AS total
+      SELECT ${periodKeySql(startDay)} AS month, type::text AS type, SUM(amount)::bigint AS total
       FROM transactions
       WHERE user_id = ${userId}
         AND status = 'CONFIRMED'

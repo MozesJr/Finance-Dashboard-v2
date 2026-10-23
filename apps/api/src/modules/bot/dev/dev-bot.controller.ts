@@ -1,9 +1,11 @@
-import { Body, Controller, ForbiddenException, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '../../../common/decorators';
 import { ZodValidationPipe } from '../../../common/pipes/zod-validation.pipe';
 import { CurrentUserData } from '../../../common/types';
 import { BotCore } from '../core/bot-core.service';
+import { DevOutbox } from '../bot-notifier';
+import { TelegramLinkService } from '../../telegram-link/telegram-link.service';
 
 const SimulateSchema = z
   .object({
@@ -29,7 +31,19 @@ type SimulateInput = z.infer<typeof SimulateSchema>;
  */
 @Controller('dev/bot')
 export class DevBotController {
-  constructor(private core: BotCore) {}
+  constructor(
+    private core: BotCore,
+    private outbox: DevOutbox,
+    private links: TelegramLinkService,
+  ) {}
+
+  /** Pesan yang didorong server ke chat simulasi user ini (checklist gajian, pengingat); sekali baca. */
+  @Get('outbox')
+  async drain(@CurrentUser() user: CurrentUserData) {
+    if (process.env.NODE_ENV !== 'development') throw new ForbiddenException('Hanya tersedia di mode development.');
+    const chatId = await this.links.getChatId(user.userId);
+    return { chatId, messages: chatId ? this.outbox.drain(chatId) : [] };
+  }
 
   @Post('simulate')
   async simulate(@CurrentUser() user: CurrentUserData, @Body(new ZodValidationPipe(SimulateSchema)) body: SimulateInput) {

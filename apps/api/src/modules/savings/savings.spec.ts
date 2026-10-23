@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { averageExpense, effectiveTarget, estimateMonths, SavingsService } from './savings.service';
 import { GoalUnitOfWork, SavingsRepository } from './savings.repository';
+import { fakePeriods } from '../periods/periods.testing';
 import { WalletsService } from '../wallets/wallets.service';
 
 const W_GOAL = '11111111-1111-4111-8111-111111111111';
@@ -64,6 +65,14 @@ describe('pure helpers', () => {
     expect(none.note).toContain('Belum ada data pengeluaran');
   });
 
+  it('estimateMonths: awal kontribusi dihitung per periode gajian (startDay 25)', () => {
+    const stats = { windowNet: 3_000_000n, firstDate: new Date('2026-10-26T00:00:00Z') };
+    // startDay 1: Okt → Nov = 2 bulan aktif → 1,5jt/bulan; sisa 2,5jt → 2 bulan
+    expect(estimateMonths(2_500_000n, stats, '2026-11')).toBe(2);
+    // startDay 25: 26 Okt masuk periode 2026-11 (periode yang sama) → 1 periode aktif → 3jt/periode → 1
+    expect(estimateMonths(2_500_000n, stats, '2026-11', 25)).toBe(1);
+  });
+
   it('estimateMonths: bulat ke atas, null bila setoran bersih ≤ 0 / tanpa target / tanpa riwayat, 0 bila tercapai', () => {
     const stats = (windowNet: bigint, first: string) => ({ windowNet, firstDate: new Date(`${first}T00:00:00Z`) });
     // mulai 3 bulan lalu, net 3jt dalam jendela → 1jt/bulan; sisa 2,5jt → 3 bulan
@@ -114,7 +123,7 @@ describe('SavingsService', () => {
     repo.runInGoalLock.mockImplementation(async (_u, _g, fn) => fn(uow));
     wallets = { getOwned: jest.fn() } as unknown as jest.Mocked<WalletsService>;
     wallets.getOwned.mockImplementation(async (_u, id) => ({ id, name: id, isArchived: false }) as never);
-    service = new SavingsService(repo, wallets);
+    service = new SavingsService(repo, wallets, fakePeriods() as never);
   });
 
   describe('goals', () => {

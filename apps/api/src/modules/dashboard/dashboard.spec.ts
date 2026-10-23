@@ -1,3 +1,4 @@
+import { fakePeriods } from '../periods/periods.testing';
 import { DashboardService, percentChange, percentOf } from './dashboard.service';
 import { DashboardRepository } from './dashboard.repository';
 import { WalletsService } from '../wallets/wallets.service';
@@ -28,7 +29,7 @@ describe('DashboardService', () => {
       monthlyTotals: jest.fn(),
     } as unknown as jest.Mocked<DashboardRepository>;
     wallets = { list: jest.fn() } as unknown as jest.Mocked<WalletsService>;
-    service = new DashboardService(repo, wallets);
+    service = new DashboardService(repo, wallets, fakePeriods() as never);
   });
 
   it('summary: net, perubahan vs bulan lalu, totalBalance dari wallet aktif, semua string', async () => {
@@ -84,7 +85,7 @@ describe('DashboardService', () => {
     repo.totalsByCategory.mockResolvedValue([]);
     repo.findCategories.mockResolvedValue([]);
     const r = await service.byCategory('u1', { month: '2026-10', type: 'INCOME' });
-    expect(r).toEqual({ month: '2026-10', type: 'INCOME', total: '0', items: [] });
+    expect(r).toMatchObject({ month: '2026-10', type: 'INCOME', total: '0', items: [], period: { key: '2026-10', label: 'Okt 2026', start: '2026-10-01', end: '2026-10-31' } });
   });
 
   it('trend: bulan tanpa transaksi diisi 0, urut lama → baru, panjang = months', async () => {
@@ -96,11 +97,11 @@ describe('DashboardService', () => {
         { month: '2026-08', type: 'EXPENSE', total: 700_000n },
       ]);
       const { months } = await service.trend('u1', { months: 4 });
-      expect(months).toEqual([
+      expect(months).toMatchObject([
         { month: '2026-07', income: '0', expense: '0', net: '0' },
         { month: '2026-08', income: '0', expense: '700000', net: '-700000' },
         { month: '2026-09', income: '0', expense: '0', net: '0' },
-        { month: '2026-10', income: '5000000', expense: '1000000', net: '4000000' },
+        { month: '2026-10', income: '5000000', expense: '1000000', net: '4000000', label: 'Okt 2026' },
       ]);
       const [uid, start, end] = repo.monthlyTotals.mock.calls[0];
       expect(uid).toBe('u1');
@@ -132,5 +133,48 @@ describe('DashboardService', () => {
       ['Lain', '50000', 12.5],
     ]);
     expect(repo.sumByType.mock.calls[0][0]).toBe('u1');
+  });
+
+  describe('periode gajian (startDay 25)', () => {
+    let svc25: DashboardService;
+    beforeEach(() => {
+      svc25 = new DashboardService(repo, wallets, fakePeriods(25) as never);
+    });
+
+    it('summary: rentang 25 Okt – 24 Nov untuk kunci 2026-11, periode sebelumnya 25 Sep – 24 Okt', async () => {
+      repo.sumByType.mockResolvedValue({ income: 1n, expense: 1n });
+      wallets.list.mockResolvedValue([] as never);
+      const s = await svc25.summary('u1', { month: '2026-11' });
+      const [, curStart, curEnd] = repo.sumByType.mock.calls[0];
+      const [, prevStart, prevEnd] = repo.sumByType.mock.calls[1];
+      expect([curStart.toISOString().slice(0, 10), curEnd.toISOString().slice(0, 10)]).toEqual(['2026-10-25', '2026-11-25']);
+      expect([prevStart.toISOString().slice(0, 10), prevEnd.toISOString().slice(0, 10)]).toEqual(['2026-09-25', '2026-10-25']);
+      expect(s.month).toBe('2026-11');
+      expect(s.previousMonth).toBe('2026-10');
+      expect(s.period).toEqual({ key: '2026-11', label: 'Nov 2026 (25 Okt – 24 Nov)', start: '2026-10-25', end: '2026-11-24' });
+      expect(s.previousPeriod.start).toBe('2026-09-25');
+    });
+
+    it('by-category memakai rentang periode', async () => {
+      repo.totalsByCategory.mockResolvedValue([]);
+      repo.findCategories.mockResolvedValue([]);
+      await svc25.byCategory('u1', { month: '2026-11', type: 'EXPENSE' });
+      const [, , start, end] = repo.totalsByCategory.mock.calls[0];
+      expect([start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)]).toEqual(['2026-10-25', '2026-11-25']);
+    });
+
+    it('trend: startDay diteruskan ke agregasi DB dan rentang mencakup N periode penuh', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-11-26T05:00:00Z')); // 26 Nov WIB → periode 2026-12
+      try {
+        repo.monthlyTotals.mockResolvedValue([{ month: '2026-12', type: 'EXPENSE', total: 300_000n }]);
+        const { months } = await svc25.trend('u1', { months: 3 });
+        expect(months.map((m) => m.month)).toEqual(['2026-10', '2026-11', '2026-12']);
+        expect(months[2]).toMatchObject({ expense: '300000', label: 'Des 2026 (25 Nov – 24 Des)' });
+        const [, start, end, startDay] = repo.monthlyTotals.mock.calls[0];
+        expect([start.toISOString().slice(0, 10), end.toISOString().slice(0, 10), startDay]).toEqual(['2026-09-25', '2026-12-25', 25]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

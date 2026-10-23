@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AllocationKind } from '@prisma/client';
-import { getCurrentMonthJakarta, getMonthRange, splitByPercent } from 'shared';
+import { getPeriodRange, periodLabel, splitByPercent, toDateString } from 'shared';
+import type { PeriodInfo } from 'shared';
+import { PeriodsService } from '../periods/periods.service';
 import { percentOf } from '../../common/percent';
 import { GoalResponse, SavingsService } from '../savings/savings.service';
 import { AllocationRepository, ItemWriteData, PlanWithItems } from './allocation.repository';
@@ -40,6 +42,8 @@ export interface ReportItem {
   percent: number;
   goalId: string | null;
   goalName: string | null;
+  /** Kategori pengeluaran yang terhubung ke pos (pos EXPENSE). */
+  categoryIds: string[];
   /** Pos tabungan 0%: sudah selesai / dialihkan. */
   dialihkan: boolean;
   planned: string;
@@ -54,7 +58,9 @@ export interface ReportItem {
 }
 
 export interface ReportResponse {
+  /** Kunci periode (YYYY-MM). */
   month: string;
+  period: PeriodInfo;
   isCurrentMonth: boolean;
   phase: number;
   activePhase: number;
@@ -82,6 +88,7 @@ export class AllocationService {
   constructor(
     private repository: AllocationRepository,
     private savings: SavingsService,
+    private periods: PeriodsService,
   ) {}
 
   async getPlan(userId: string): Promise<{ plan: PlanResponse | null }> {
@@ -91,10 +98,10 @@ export class AllocationService {
 
   async report(userId: string, query: AllocationQuery): Promise<ReportResponse> {
     const plan = await this.requirePlan(userId);
-    const currentMonth = getCurrentMonthJakarta();
+    const { key: currentMonth, startDay } = await this.periods.resolve(userId);
     const month = query.month ?? currentMonth;
     const phase = query.phase ?? plan.activePhase;
-    const { start, endExclusive } = getMonthRange(month);
+    const { start, endExclusive } = getPeriodRange(month, startDay);
 
     const phaseItems = plan.items.filter((i) => i.phase === phase);
     const [planned, expenseByCategory, netByGoal, goals] = await Promise.all([
@@ -124,6 +131,7 @@ export class AllocationService {
         percent: item.percent,
         goalId: item.linkedGoalId,
         goalName: item.linkedGoalId ? (goalById.get(item.linkedGoalId)?.name ?? null) : null,
+        categoryIds: item.categories.map((c) => c.categoryId),
         dialihkan: item.kind === 'SAVING' && item.percent === 0,
         planned: plannedAmount.toString(),
         realized: realized.toString(),
@@ -140,6 +148,7 @@ export class AllocationService {
 
     return {
       month,
+      period: { key: month, label: periodLabel(month, startDay), start: toDateString(start), end: toDateString(new Date(endExclusive.getTime() - 86_400_000)) },
       isCurrentMonth: month === currentMonth,
       phase,
       activePhase: plan.activePhase,

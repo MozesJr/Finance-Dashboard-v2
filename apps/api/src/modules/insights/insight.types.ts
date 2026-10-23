@@ -1,6 +1,8 @@
 /** Statistik bulanan yang dihitung di kode. Nominal Rupiah berupa string BigInt. */
 export interface InsightStats {
-  period: string; // YYYY-MM
+  period: string; // kunci periode YYYY-MM
+  /** Label periode, mis. "Nov 2026 (25 Okt – 24 Nov)" (tidak ada pada insight lama). */
+  periodLabel?: string;
   provisional: boolean;
   /** Tanggal data terakhir (hari ini) bila provisional. */
   asOf: string | null;
@@ -37,6 +39,8 @@ export interface InsightContent {
 
 export interface InsightResponse extends InsightContent {
   period: string;
+  /** Label periode bertanggal; null untuk insight lama. */
+  label: string | null;
   provisional: boolean;
   generatedAt: Date;
 }

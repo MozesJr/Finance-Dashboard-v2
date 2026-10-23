@@ -2,10 +2,12 @@ import { AiUnavailableError } from '../ai/ai.errors';
 import type { LlmMessage } from '../ai/llm-client.service';
 import { UsageMeter } from '../ai/usage-meter';
 import { AiChatService, MAX_TOOL_ITERATIONS, STORED_MESSAGES_LIMIT, toPlainText } from './ai-chat.service';
+import { fakePeriods } from '../periods/periods.testing';
 import { CHAT_TOOLS, ChatToolsService, MAX_SEARCH_ROWS } from './chat-tools.service';
 
 const summary = {
   month: '2026-10',
+  period: { key: '2026-10', label: 'Okt 2026', start: '2026-10-01', end: '2026-10-31' },
   previousMonth: '2026-09',
   totalIncome: '5000000',
   totalExpense: '1287500',
@@ -18,13 +20,13 @@ const summary = {
 const buildTools = () => {
   const dashboard = {
     summary: jest.fn().mockResolvedValue(summary),
-    byCategory: jest.fn().mockResolvedValue({ month: '2026-10', type: 'EXPENSE', total: '1287500', items: [{ name: 'Makan & Minum', total: '1252500', percent: 97.3, count: 3 }] }),
-    trend: jest.fn().mockResolvedValue({ months: [{ month: '2026-10', income: '5000000', expense: '1287500', net: '3712500' }] }),
+    byCategory: jest.fn().mockResolvedValue({ month: '2026-10', period: { label: 'Okt 2026' }, type: 'EXPENSE', total: '1287500', items: [{ name: 'Makan & Minum', total: '1252500', percent: 97.3, count: 3 }] }),
+    trend: jest.fn().mockResolvedValue({ months: [{ month: '2026-10', label: 'Okt 2026', income: '5000000', expense: '1287500', net: '3712500' }] }),
   };
   const transactions = { list: jest.fn().mockResolvedValue({ items: [], nextCursor: null }) };
   const wallets = { list: jest.fn().mockResolvedValue([{ id: 'w1', name: 'BCA', type: 'BANK', balance: '6300000' }]), investmentSummary: jest.fn() };
   const savings = { list: jest.fn().mockResolvedValue([{ name: 'Dana Darurat', type: 'EMERGENCY', collected: '1800000', target: '1500000', percent: 120, remaining: '0', estimatedMonths: 0 }]) };
-  const allocation = { report: jest.fn().mockResolvedValue({ month: '2026-10', phase: 1, monthlyIncome: '10000000', items: [{ name: 'Kebutuhan', percent: 45, planned: '4500000', realized: '1252500', remaining: '3247500', status: 'AMAN' }] }) };
+  const allocation = { report: jest.fn().mockResolvedValue({ month: '2026-10', period: { label: 'Okt 2026' }, phase: 1, monthlyIncome: '10000000', items: [{ name: 'Kebutuhan', percent: 45, planned: '4500000', realized: '1252500', remaining: '3247500', status: 'AMAN' }] }) };
   const categories = { list: jest.fn().mockResolvedValue([{ id: 'cat-makan', name: 'Makan & Minum' }, { id: 'cat-trans', name: 'Transportasi' }]) };
   const tools = new ChatToolsService(dashboard as never, transactions as never, wallets as never, savings as never, allocation as never, categories as never);
   return { tools, dashboard, transactions, wallets, savings, allocation, categories };
@@ -52,7 +54,7 @@ describe('ChatToolsService', () => {
 
   it('get_summary: nilai Rupiah diformat dan periode disebutkan', async () => {
     const out = JSON.parse(await buildTools().tools.execute('u1', 'get_summary', '{}'));
-    expect(out).toMatchObject({ period: '2026-10', totalExpenseFormatted: 'Rp1.287.500', totalIncomeFormatted: 'Rp5.000.000', netFormatted: 'Rp3.712.500', totalBalanceFormatted: 'Rp8.712.500' });
+    expect(out).toMatchObject({ period: '2026-10', periodLabel: 'Okt 2026', totalExpenseFormatted: 'Rp1.287.500', totalIncomeFormatted: 'Rp5.000.000', netFormatted: 'Rp3.712.500', totalBalanceFormatted: 'Rp8.712.500' });
   });
 
   it('argumen tidak valid / JSON rusak / tool tak dikenal → {"error"} (tidak melempar)', async () => {
@@ -114,7 +116,7 @@ describe('AiChatService', () => {
       prune: jest.fn().mockResolvedValue(undefined),
       clear: jest.fn().mockResolvedValue(1),
     };
-    const service = new AiChatService(llm as never, prompts as never, usage as never, tools as never, repo as never);
+    const service = new AiChatService(llm as never, prompts as never, usage as never, tools as never, repo as never, fakePeriods() as never);
     return { service, llm, prompts, usage, tools, repo };
   };
   const call = (id: string, name: string, args = '{}') => ({ id, name, arguments: args });
@@ -182,7 +184,7 @@ describe('AiChatService', () => {
     expect(msgs[1]).toEqual({ role: 'user', content: 'pertanyaan lama' });
     expect((msgs[2].content as string).length).toBeLessThanOrEqual(501);
     expect(msgs.at(-1)).toEqual({ role: 'user', content: 'lanjutan' });
-    expect(t.prompts.get).toHaveBeenCalledWith('chat-system', expect.objectContaining({ today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), month: expect.stringMatching(/^\d{4}-\d{2}$/) }));
+    expect(t.prompts.get).toHaveBeenCalledWith('chat-system', expect.objectContaining({ today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), period: expect.any(String), periodKey: expect.stringMatching(/^\d{4}-\d{2}$/) }));
   });
 
   it('AI gagal → error diteruskan dan riwayat TIDAK tersimpan', async () => {

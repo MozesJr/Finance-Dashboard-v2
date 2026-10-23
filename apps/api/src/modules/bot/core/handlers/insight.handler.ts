@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getCurrentMonthJakarta } from 'shared';
 import { AiParseError, AiQuotaError, AiUnavailableError } from '../../../ai/ai.errors';
 import { periodLabel } from '../../../insights/insight-narrative';
+import { PeriodsService } from '../../../periods/periods.service';
 import { InsightResponse } from '../../../insights/insight.types';
 import { InsightsService } from '../../../insights/insights.service';
 import { BotReply, BotUser, send } from '../types';
@@ -10,7 +10,7 @@ import { BotReply, BotUser, send } from '../types';
 export const INSIGHT_CACHE_MS = 6 * 60 * 60 * 1000;
 
 export function formatInsight(insight: InsightResponse): string {
-  const label = periodLabel(insight.period) + (insight.provisional ? ' (sementara)' : '');
+  const label = (insight.label ?? periodLabel(insight.period)) + (insight.provisional ? ' (sementara)' : '');
   const lines = [`🧠 Insight ${label}`, insight.narrative.summary, 'Temuan:'];
   insight.narrative.findings.forEach((f, i) => lines.push(`${i + 1}. ${f}`));
   lines.push('Saran:');
@@ -23,11 +23,14 @@ export function formatInsight(insight: InsightResponse): string {
 export class InsightHandler {
   private readonly logger = new Logger(InsightHandler.name);
 
-  constructor(private insights: InsightsService) {}
+  constructor(
+    private insights: InsightsService,
+    private periods: PeriodsService,
+  ) {}
 
   async handle(user: BotUser): Promise<BotReply[]> {
     try {
-      const insight = await this.insights.getOrGenerate(user.userId, getCurrentMonthJakarta(), INSIGHT_CACHE_MS);
+      const insight = await this.insights.getOrGenerate(user.userId, (await this.periods.current(user.userId)).key, INSIGHT_CACHE_MS);
       return [send(formatInsight(insight))];
     } catch (error) {
       if (error instanceof AiQuotaError) return [send(`ℹ️ ${error.message}`)];

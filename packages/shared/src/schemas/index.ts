@@ -9,3 +9,5 @@ export * from './dashboard';
 export * from './savings';
 export * from './allocation';
 export * from './ai';
+export * from './settings';
+export * from './payday';

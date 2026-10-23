@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { TransactionEvents } from './transaction-events';
 import { TxSource, TxStatus } from '@prisma/client';
 import { checkTransactionShape, getTodayInJakarta } from 'shared';
 import { WalletsService } from '../wallets/wallets.service';
@@ -84,6 +85,7 @@ export class TransactionsService {
     private repository: TransactionsRepository,
     private wallets: WalletsService,
     private categories: CategoriesService,
+    @Optional() private events?: TransactionEvents,
   ) {}
 
   async list(userId: string, query: TransactionListQuery): Promise<TransactionPage> {
@@ -133,7 +135,14 @@ export class TransactionsService {
       status: options.status ?? 'CONFIRMED',
       receiptId: input.receiptId ?? null,
     });
-    return toResponse(created);
+    const response = toResponse(created);
+    this.announceConfirmed(userId, response);
+    return response;
+  }
+
+  /** Kabari pendengar (tanpa menunggu) bila transaksi baru berstatus CONFIRMED. */
+  private announceConfirmed(userId: string, tx: TransactionResponse): void {
+    if (tx.status === 'CONFIRMED') void this.events?.emitConfirmed(userId, tx);
   }
 
   async update(userId: string, id: string, input: UpdateTransactionInput): Promise<TransactionResponse> {
@@ -218,7 +227,9 @@ export class TransactionsService {
       existing,
     );
     await this.repository.setStatus(userId, id, 'CONFIRMED');
-    return this.get(userId, id);
+    const confirmed = await this.get(userId, id);
+    this.announceConfirmed(userId, confirmed);
+    return confirmed;
   }
 
   async discardDraft(userId: string, id: string): Promise<void> {

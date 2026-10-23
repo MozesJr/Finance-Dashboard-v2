@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SavingsContribution } from '@prisma/client';
-import { getCurrentMonthJakarta, getMonthRange, getTodayInJakarta, shiftMonth } from 'shared';
+import { getPeriodKey, getPeriodRange, getTodayInJakarta, shiftMonth, toDateString } from 'shared';
+import { PeriodsService } from '../periods/periods.service';
 import { percentOf } from '../../common/percent';
 import { WalletsService } from '../wallets/wallets.service';
 import { ContributionStats, GoalWithWallet, GoalWriteData, MonthlyTotal, SavingsRepository } from './savings.repository';
@@ -84,11 +85,12 @@ export function estimateMonths(
   remaining: bigint | null,
   stats: ContributionStats | undefined,
   currentMonth: string,
+  startDay = 1,
 ): number | null {
   if (remaining === null) return null;
   if (remaining === 0n) return 0;
   if (!stats) return null;
-  const firstMonth = stats.firstDate.toISOString().slice(0, 7);
+  const firstMonth = getPeriodKey(toDateString(stats.firstDate), startDay);
   const monthsActive = Math.min(ESTIMATE_WINDOW_MONTHS, Math.max(1, monthIndex(currentMonth) - monthIndex(firstMonth) + 1));
   const avgNet = stats.windowNet / BigInt(monthsActive);
   if (avgNet <= 0n) return null;
@@ -100,23 +102,24 @@ export class SavingsService {
   constructor(
     private repository: SavingsRepository,
     private wallets: WalletsService,
+    private periods: PeriodsService,
   ) {}
 
   // ---------- Goals ----------
 
   async list(userId: string, includeArchived = false): Promise<GoalResponse[]> {
-    const currentMonth = getCurrentMonthJakarta();
+    const { key: currentMonth, startDay } = await this.periods.resolve(userId);
     const [goals, collected, stats] = await Promise.all([
       this.repository.findGoals(userId, includeArchived),
       this.repository.collectedByGoal(userId),
       this.repository.contributionStats(
         userId,
-        getMonthRange(shiftMonth(currentMonth, -(ESTIMATE_WINDOW_MONTHS - 1))).start,
-        getMonthRange(currentMonth).endExclusive,
+        getPeriodRange(shiftMonth(currentMonth, -(ESTIMATE_WINDOW_MONTHS - 1)), startDay).start,
+        getPeriodRange(currentMonth, startDay).endExclusive,
       ),
     ]);
     const avg = goals.some((g) => g.targetMode === 'MONTHS_OF_EXPENSE') ? await this.averageMonthlyExpense(userId) : null;
-    return goals.map((g) => this.toGoalResponse(g, collected.get(g.id) ?? 0n, stats.get(g.id), avg, currentMonth));
+    return goals.map((g) => this.toGoalResponse(g, collected.get(g.id) ?? 0n, stats.get(g.id), avg, currentMonth, startDay));
   }
 
   async get(userId: string, id: string): Promise<GoalResponse> {
@@ -303,11 +306,12 @@ export class SavingsService {
   }
 
   private async averageMonthlyExpense(userId: string): Promise<AvgExpense | null> {
-    const current = getCurrentMonthJakarta();
+    const { key: current, startDay } = await this.periods.resolve(userId);
     const totals = await this.repository.monthlyExpenseTotals(
       userId,
-      getMonthRange(shiftMonth(current, -3)).start,
-      getMonthRange(current).start, // 3 bulan penuh terakhir: bulan berjalan tidak ikut
+      getPeriodRange(shiftMonth(current, -3), startDay).start,
+      getPeriodRange(current, startDay).start, // 3 periode penuh terakhir: periode berjalan tidak ikut
+      startDay,
     );
     return averageExpense(totals);
   }
@@ -318,6 +322,7 @@ export class SavingsService {
     stats: ContributionStats | undefined,
     avgExpense: AvgExpense | null,
     currentMonth: string,
+    startDay: number,
   ): GoalResponse {
     const { target, note } = effectiveTarget(goal, avgExpense);
     const remaining = target === null ? null : target > collected ? target - collected : 0n;
@@ -341,7 +346,7 @@ export class SavingsService {
       targetNote: note,
       remaining: remaining?.toString() ?? null,
       percent: target === null || target === 0n ? null : percentOf(collected < 0n ? 0n : collected, target),
-      estimatedMonths: estimateMonths(remaining, stats, currentMonth),
+      estimatedMonths: estimateMonths(remaining, stats, currentMonth, startDay),
       createdAt: goal.createdAt,
     };
   }

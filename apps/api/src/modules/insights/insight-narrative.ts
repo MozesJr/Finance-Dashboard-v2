@@ -9,6 +9,9 @@ export function periodLabel(period: string): string {
   return `${MONTHS[Number(m) - 1]} ${y}`;
 }
 
+/** Label periode untuk narasi: label bertanggal bila ada (periode gajian), jika tidak nama bulan. */
+export const statsPeriodLabel = (stats: InsightStats): string => stats.periodLabel ?? periodLabel(stats.period);
+
 const rp = (v: string | bigint) => formatMoneyId(v);
 const pct = (v: number) => `${Math.abs(v).toLocaleString('id-ID')}%`;
 
@@ -37,7 +40,7 @@ export function collectStatNumbers(stats: InsightStats): bigint[] {
 /** Tampilan statistik untuk LLM: nominal sudah diformat "Rp1.287.500" supaya disalin apa adanya. */
 export function promptView(stats: InsightStats): Record<string, unknown> {
   return {
-    period: periodLabel(stats.period),
+    period: statsPeriodLabel(stats),
     provisional: stats.provisional,
     asOf: stats.asOf,
     totalIncome: rp(stats.totalIncome),
@@ -69,7 +72,7 @@ export function promptView(stats: InsightStats): Record<string, unknown> {
  * jadi selalu lolos validasi angka.
  */
 export function templateNarrative(stats: InsightStats): InsightNarrativeData {
-  const label = periodLabel(stats.period);
+  const label = statsPeriodLabel(stats);
   const partial = stats.provisional && stats.asOf ? ` (sementara, data sampai ${stats.asOf})` : '';
 
   let summary = `Pada ${label}${partial}, pemasukanmu ${rp(stats.totalIncome)} dan pengeluaranmu ${rp(stats.totalExpense)}, sehingga selisihnya ${rp(stats.net)}.`;

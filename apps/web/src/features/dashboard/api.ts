@@ -1,5 +1,5 @@
 import http from '@/lib/http';
-import type { CategoryType } from 'shared';
+import type { CategoryType, PeriodInfo } from 'shared';
 
 export interface MonthTotals {
   totalIncome: string;
@@ -8,8 +8,11 @@ export interface MonthTotals {
 }
 
 export interface SummaryDto extends MonthTotals {
+  /** Kunci periode (YYYY-MM). */
   month: string;
   previousMonth: string;
+  period: PeriodInfo;
+  previousPeriod: PeriodInfo;
   previous: MonthTotals;
   change: { income: number | null; expense: number | null; net: number | null };
   totalBalance: string;
@@ -27,6 +30,7 @@ export interface ByCategoryItem {
 
 export interface ByCategoryDto {
   month: string;
+  period: PeriodInfo;
   type: CategoryType;
   total: string;
   items: ByCategoryItem[];
@@ -34,6 +38,7 @@ export interface ByCategoryDto {
 
 export interface TrendItem {
   month: string;
+  label: string;
   income: string;
   expense: string;
   net: string;

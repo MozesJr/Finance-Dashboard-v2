@@ -46,7 +46,7 @@ export function InsightPanel({ month }: { month: string }) {
         <ErrorState message={getErrorMessage(error, 'Gagal memuat insight.')} onRetry={() => refetch()} />
       ) : !insight ? (
         <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted">Belum ada insight untuk bulan ini. AI akan merangkum pengeluaranmu dan memberi saran konkret.</p>
+          <p className="text-sm text-muted">Belum ada insight untuk periode ini. AI akan merangkum pengeluaranmu dan memberi saran konkret.</p>
           <Button onClick={run} disabled={refresh.isPending}>
             {refresh.isPending ? 'Membuat insight…' : 'Buat insight'}
           </Button>

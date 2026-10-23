@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { getCurrentMonthJakarta, InsightNarrativeSchema, validateNarrativeNumbers } from 'shared';
+import { InsightNarrativeSchema, validateNarrativeNumbers } from 'shared';
+import { PeriodsService } from '../periods/periods.service';
 import { AiParseError } from '../ai/ai.errors';
 import { AiUsageService } from '../ai/ai-usage.service';
 import { LlmClient } from '../ai/llm-client.service';
@@ -26,26 +27,31 @@ export class InsightsService {
     private llm: LlmClient,
     private prompts: PromptService,
     private usage: AiUsageService,
+    private periods: PeriodsService,
   ) {}
 
   /** Insight tersimpan (cache) atau null. Tidak memakai kuota. */
-  async get(userId: string, month: string = getCurrentMonthJakarta()): Promise<InsightResponse | null> {
+  async get(userId: string, requested?: string): Promise<InsightResponse | null> {
+    const { key: current } = await this.periods.resolve(userId);
+    const month = requested ?? current;
     const row = await this.repository.find(userId, month);
-    return row ? this.toResponse(month, row.content as unknown as InsightContent, row.generatedAt) : null;
+    return row ? this.toResponse(month, current, row.content as unknown as InsightContent, row.generatedAt) : null;
   }
 
   /** Generate + simpan. Kena kuota INSIGHT kecuali dipanggil job. */
-  async generate(userId: string, month: string = getCurrentMonthJakarta(), options: { skipQuota?: boolean } = {}): Promise<InsightResponse> {
+  async generate(userId: string, requested?: string, options: { skipQuota?: boolean } = {}): Promise<InsightResponse> {
     return this.usage.track(
       userId,
       'INSIGHT',
       async (meter) => {
+        const { key: current } = await this.periods.resolve(userId);
+        const month = requested ?? current;
         const stats = await this.stats.build(userId, month);
         const { narrative, source } = await this.narrate(stats, meter);
         const content: InsightContent = { stats, narrative, source };
         const generatedAt = new Date();
         await this.repository.upsert(userId, month, content as unknown as Prisma.InputJsonValue, generatedAt);
-        return this.toResponse(month, content, generatedAt);
+        return this.toResponse(month, current, content, generatedAt);
       },
       options,
     );
@@ -99,10 +105,11 @@ export class InsightsService {
     return { narrative, source: 'TEMPLATE' };
   }
 
-  private toResponse(period: string, content: InsightContent, generatedAt: Date): InsightResponse {
+  private toResponse(period: string, current: string, content: InsightContent, generatedAt: Date): InsightResponse {
     return {
       period,
-      provisional: period === getCurrentMonthJakarta(),
+      label: content.stats.periodLabel ?? null,
+      provisional: period === current,
       generatedAt,
       source: content.source,
       stats: content.stats,

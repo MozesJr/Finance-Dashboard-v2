@@ -6,3 +6,4 @@ export * from './receipt';
 export * from './question';
 export * from './insight';
 export * from './investment';
+export * from './period';

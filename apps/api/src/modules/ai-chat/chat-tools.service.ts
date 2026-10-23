@@ -31,23 +31,26 @@ const SearchArgs = z
 const NoArgs = z.object({}).strict();
 const AllocationArgs = z.object({ month: MonthStringSchema.optional() }).strict();
 
-const monthProp = { type: 'string', description: 'Bulan format YYYY-MM. Kosongkan untuk bulan berjalan.' };
+const monthProp = {
+  type: 'string',
+  description: 'Kunci periode keuangan format YYYY-MM (bulan tempat periode berakhir). Kosongkan untuk periode berjalan.',
+};
 
 /** Definisi tool untuk model. userId TIDAK ada di parameter mana pun: selalu disuntik server. */
 export const CHAT_TOOLS: ToolDefinition[] = [
   {
     name: 'get_summary',
-    description: 'Ringkasan satu bulan: total pemasukan, pengeluaran, selisih, perubahan vs bulan sebelumnya, dan total saldo.',
+    description: 'Ringkasan satu periode keuangan (rentang gajian user): total pemasukan, pengeluaran, selisih, perubahan vs bulan sebelumnya, dan total saldo.',
     parameters: { type: 'object', properties: { month: monthProp } },
   },
   {
     name: 'get_spending_by_category',
-    description: 'Rincian total per kategori untuk satu bulan (terbesar dulu), beserta persentase.',
+    description: 'Rincian total per kategori untuk satu periode keuangan (terbesar dulu), beserta persentase.',
     parameters: { type: 'object', properties: { month: monthProp, type: { type: 'string', enum: ['EXPENSE', 'INCOME'], description: 'Default EXPENSE.' } } },
   },
   {
     name: 'get_trend',
-    description: 'Tren pemasukan, pengeluaran, dan selisih per bulan untuk N bulan terakhir.',
+    description: 'Tren pemasukan, pengeluaran, dan selisih per periode keuangan untuk N periode terakhir.',
     parameters: { type: 'object', properties: { months: { type: 'integer', description: '1–12, default 6.' } } },
   },
   {
@@ -75,7 +78,7 @@ export const CHAT_TOOLS: ToolDefinition[] = [
   { name: 'get_savings_status', description: 'Progres goal tabungan: terkumpul, target, persen, estimasi bulan.', parameters: { type: 'object', properties: {} } },
   {
     name: 'get_allocation',
-    description: 'Status alokasi gaji per pos untuk satu bulan: rencana, realisasi, sisa, status.',
+    description: 'Status alokasi gaji per pos untuk satu periode: rencana, realisasi, sisa, status.',
     parameters: { type: 'object', properties: { month: monthProp } },
   },
 ];
@@ -141,6 +144,7 @@ export class ChatToolsService {
     const s = await this.dashboard.summary(userId, { month: a.month });
     return {
       period: s.month,
+      periodLabel: s.period.label,
       totalIncome: s.totalIncome,
       totalIncomeFormatted: rp(s.totalIncome),
       totalExpense: s.totalExpense,
@@ -159,6 +163,7 @@ export class ChatToolsService {
     const r = await this.dashboard.byCategory(userId, { month: a.month, type: a.type ?? 'EXPENSE' });
     return {
       period: r.month,
+      periodLabel: r.period.label,
       type: r.type,
       totalFormatted: rp(r.total),
       categories: r.items.slice(0, 10).map((i) => ({ name: i.name, totalFormatted: rp(i.total), percent: i.percent, transactionCount: i.count })),
@@ -168,7 +173,7 @@ export class ChatToolsService {
   private async trend(userId: string, a: z.infer<typeof TrendArgs>) {
     const r = await this.dashboard.trend(userId, { months: a.months ?? 6 });
     return {
-      months: r.months.map((m) => ({ period: m.month, incomeFormatted: rp(m.income), expenseFormatted: rp(m.expense), netFormatted: rp(m.net) })),
+      months: r.months.map((m) => ({ period: m.month, periodLabel: m.label, incomeFormatted: rp(m.income), expenseFormatted: rp(m.expense), netFormatted: rp(m.net) })),
     };
   }
 
@@ -260,6 +265,7 @@ export class ChatToolsService {
       const r = await this.allocation.report(userId, { month: a.month });
       return {
         period: r.month,
+        periodLabel: r.period.label,
         phase: r.phase,
         monthlyIncomeFormatted: rp(r.monthlyIncome),
         items: r.items.map((i) => ({

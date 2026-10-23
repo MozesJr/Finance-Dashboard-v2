@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getCurrentMonthJakarta, getTodayInJakarta, shiftMonth, toDateString } from 'shared';
+import { getTodayInJakarta, shiftMonth, toDateString } from 'shared';
+import { PeriodsService } from '../periods/periods.service';
 import { AllocationService } from '../allocation/allocation.service';
 import { percentChange } from '../../common/percent';
 import { DashboardService } from '../dashboard/dashboard.service';
@@ -18,10 +19,11 @@ export class InsightStatsService {
     private dashboard: DashboardService,
     private allocation: AllocationService,
     private savings: SavingsService,
+    private periods: PeriodsService,
   ) {}
 
   async build(userId: string, month: string): Promise<InsightStats> {
-    const current = getCurrentMonthJakarta();
+    const { key: current } = await this.periods.resolve(userId);
     const priorMonths = [1, 2, 3].map((n) => shiftMonth(month, -n));
 
     const [summary, byCategory, priorSummaries, priorCategories, extras] = await Promise.all([
@@ -39,6 +41,7 @@ export class InsightStatsService {
 
     return {
       period: month,
+      periodLabel: summary.period.label,
       provisional: month === current,
       asOf: month === current ? toDateString(getTodayInJakarta()) : null,
       totalIncome: summary.totalIncome,

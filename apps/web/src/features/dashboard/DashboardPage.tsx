@@ -1,18 +1,17 @@
-import { useState } from 'react';
-import { getCurrentMonthJakarta } from 'shared';
 import { ErrorState } from '@/components/ui/states';
 import { PageHeader } from '@/components/PageHeader';
 import { getErrorMessage } from '@/lib/errors';
 import { InsightPanel } from '@/features/insights/InsightPanel';
 import { EmergencyWidget } from './components/EmergencyWidget';
 import { CategoryBreakdown } from './components/CategoryBreakdown';
+import { usePeriodSelection } from '@/features/settings/hooks';
 import { MonthPicker } from './components/MonthPicker';
 import { SummaryCards, SummaryCardsSkeleton } from './components/SummaryCards';
 import { TrendChart } from './components/TrendChart';
 import { useSummary } from './hooks';
 
 export function DashboardPage() {
-  const [month, setMonth] = useState(getCurrentMonthJakarta);
+  const [month, setMonth] = usePeriodSelection();
   const { data, isLoading, error, refetch } = useSummary(month);
 
   return (

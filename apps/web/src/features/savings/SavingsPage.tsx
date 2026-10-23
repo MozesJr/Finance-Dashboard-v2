@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PartyPopper, Plus, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCurrentMonthJakarta } from 'shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { PageHeader } from '@/components/PageHeader';
+import { usePeriodSelection } from '@/features/settings/hooks';
 import { MonthPicker } from '@/features/dashboard/components/MonthPicker';
 import { getErrorMessage } from '@/lib/errors';
 import type { GoalDto } from './api';
@@ -15,6 +15,7 @@ import { AllocationCards, AllocationTable } from './components/AllocationOvervie
 import { ContributionDialog } from './components/ContributionDialog';
 import { ContributionHistoryDialog } from './components/ContributionHistoryDialog';
 import { GoalCard } from './components/GoalCard';
+import { PaydayBanner } from '@/features/payday/components/PaydayBanner';
 import { useWallets } from '@/features/wallets/hooks';
 import { investmentTotals } from '@/features/wallets/investment';
 import { GoalFormDialog } from './components/GoalFormDialog';
@@ -30,7 +31,7 @@ type Dialog =
   | null;
 
 export function SavingsPage() {
-  const [month, setMonth] = useState(getCurrentMonthJakarta);
+  const [month, setMonth] = usePeriodSelection();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [requestedPhase, setRequestedPhase] = useState<number | null>(null);
@@ -87,6 +88,8 @@ export function SavingsPage() {
           </div>
         }
       />
+
+      <PaydayBanner />
 
       {/* Alokasi gaji */}
       <section aria-labelledby="alokasi-heading" className="space-y-4">

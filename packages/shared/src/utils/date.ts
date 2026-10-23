@@ -28,9 +28,10 @@ export function toDateString(date: Date): string {
 }
 
 /**
- * Parse YYYY-MM format to period string
+ * Bulan kalender (YYYY-MM) dari sebuah instan waktu di Asia/Jakarta.
+ * Untuk periode keuangan yang mengikuti gajian lihat getPeriod() di period.ts.
  */
-export function getPeriod(date: Date = new Date()): string {
+export function getCalendarMonth(date: Date = new Date()): string {
   const formatter = new Intl.DateTimeFormat('sv-SE', {
     timeZone: TIMEZONE,
     year: 'numeric',
@@ -77,7 +78,7 @@ export function getMonthEnd(date: Date = new Date()): Date {
 
 /** Bulan berjalan di Asia/Jakarta, format YYYY-MM */
 export function getCurrentMonthJakarta(now: Date = new Date()): string {
-  return getPeriod(now);
+  return getCalendarMonth(now);
 }
 
 /** Geser bulan YYYY-MM sebanyak delta bulan (boleh negatif). */

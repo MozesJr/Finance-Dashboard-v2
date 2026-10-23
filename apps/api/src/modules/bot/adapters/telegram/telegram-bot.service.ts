@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Bot, Context } from 'grammy';
 import { TelegramBotInfo } from '../../../telegram-link/telegram-bot-info';
 import { BOT_COMMANDS, BotCore } from '../../core/bot-core.service';
-import { BotReply, ChannelAdapter, IncomingCallback, IncomingMessage, IncomingPhoto } from '../../core/types';
+import { BotReply, ChannelAdapter, IncomingCallback, IncomingMessage, IncomingPhoto, OutgoingMessage } from '../../core/types';
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
@@ -95,6 +95,21 @@ export class TelegramBotService implements ChannelAdapter, OnModuleInit, OnModul
     }
     this.bot = null;
     this.info.enabled = false;
+  }
+
+  /** Kirim pesan dari server (bukan balasan): checklist gajian, pengingat. false bila bot tidak aktif. */
+  async push(chatId: string, message: OutgoingMessage): Promise<boolean> {
+    if (!this.bot) return false;
+    const markup = {
+      reply_markup: { inline_keyboard: (message.buttons ?? []).map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) },
+    };
+    try {
+      await this.bot.api.sendMessage(chatId, message.text, markup);
+      return true;
+    } catch (error) {
+      this.logger.warn(`Kirim pesan ke chat gagal: ${this.safe(error)}`);
+      return false;
+    }
   }
 
   /** Dipanggil controller webhook. */

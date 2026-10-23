@@ -1,6 +1,7 @@
 import { validateNarrativeNumbers } from 'shared';
 import { AiParseError, AiUnavailableError } from '../ai/ai.errors';
 import { UsageMeter } from '../ai/usage-meter';
+import { fakePeriods } from '../periods/periods.testing';
 import { InsightStats } from './insight.types';
 import { collectStatNumbers, periodLabel, promptView, templateNarrative } from './insight-narrative';
 import { InsightStatsService } from './insight-stats.service';
@@ -41,7 +42,7 @@ describe('InsightStatsService', () => {
   const build = (over: { summaryByMonth?: Record<string, { totalExpense: string }>; categoriesByMonth?: Record<string, Array<{ name: string; total: string; percent: number; count: number }>> } = {}) => {
     const sum = (month: string) => {
       const e = over.summaryByMonth?.[month]?.totalExpense ?? '0';
-      return { month, previousMonth: '', totalIncome: '5000000', totalExpense: e, net: '0', previous: { totalIncome: '0', totalExpense: '250000', net: '0' }, change: { income: 25, expense: 10, net: 0 }, totalBalance: '0' };
+      return { month, period: { key: month, label: `P ${month}` }, previousMonth: '', totalIncome: '5000000', totalExpense: e, net: '0', previous: { totalIncome: '0', totalExpense: '250000', net: '0' }, change: { income: 25, expense: 10, net: 0 }, totalBalance: '0' };
     };
     const dashboard = {
       summary: jest.fn(async (_u: string, q: { month: string }) => sum(q.month)),
@@ -59,14 +60,14 @@ describe('InsightStatsService', () => {
       }),
     };
     const savings = { list: jest.fn().mockResolvedValue([{ name: 'Dana Darurat', percent: 50, collected: '750000', target: '1500000', remaining: '750000', estimatedMonths: 3 }]) };
-    return { service: new InsightStatsService(dashboard as never, allocation as never, savings as never), dashboard, allocation, savings };
+    return { service: new InsightStatsService(dashboard as never, allocation as never, savings as never, fakePeriods() as never), dashboard, allocation, savings };
   };
 
   it('total, rata-rata 3 bulan sebelumnya (hanya bulan yang punya data), dan persentase vs rata-rata', async () => {
     const t = build({ summaryByMonth: { '2026-09': { totalExpense: '1000000' }, '2026-08': { totalExpense: '0' }, '2026-07': { totalExpense: '500000' }, '2026-06': { totalExpense: '600000' } } });
     // bulan target 2026-10 → sebelumnya 09, 08, 07 (08 kosong)
     t.dashboard.summary.mockImplementation(async (_u: string, q: { month: string }) => ({
-      month: q.month, totalIncome: '5000000', net: '0', totalBalance: '0', previousMonth: '', change: { income: 1, expense: 40, net: 0 },
+      month: q.month, period: { key: q.month, label: `P ${q.month}` }, totalIncome: '5000000', net: '0', totalBalance: '0', previousMonth: '', change: { income: 1, expense: 40, net: 0 },
       totalExpense: ({ '2026-10': '1200000', '2026-09': '1000000', '2026-08': '0', '2026-07': '500000' } as Record<string, string>)[q.month] ?? '0',
       previous: { totalIncome: '0', totalExpense: '1000000', net: '0' },
     }));
@@ -174,7 +175,7 @@ describe('InsightsService', () => {
     const llm = { structured: jest.fn() };
     const prompts = { get: jest.fn().mockReturnValue('PROMPT') };
     const usage = { track: jest.fn(async (_u: string, _f: string, fn: (m: UsageMeter) => Promise<unknown>) => fn(new UsageMeter())) };
-    const service = new InsightsService(repo as never, statsSvc as never, llm as never, prompts as never, usage as never);
+    const service = new InsightsService(repo as never, statsSvc as never, llm as never, prompts as never, usage as never, fakePeriods() as never);
     return { service, repo, statsSvc, llm, prompts, usage };
   };
   const good = () => narrativeFrom(fixture());
@@ -268,19 +269,46 @@ describe('InsightsService', () => {
 });
 
 describe('InsightsJobService', () => {
-  it('bulan sebelumnya, tanpa kuota, berurutan; satu kegagalan tidak menghentikan yang lain', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-11-01T00:00:00Z')); // 07:00 WIB 1 Nov
-    try {
-      const repo = { findActiveUserIdsWithActivity: jest.fn().mockResolvedValue(['u1', 'u2', 'u3']) };
-      const insights = { generate: jest.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('LLM down')).mockResolvedValueOnce({}) };
-      const job = new InsightsJobService(repo as never, insights as never);
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  const build = (ids: string[] = ['u1', 'u2', 'u3']) => {
+    const repo = { findActiveUserIdsWithActivity: jest.fn().mockResolvedValue(ids) };
+    const insights = { generate: jest.fn().mockResolvedValue({}) };
+    return { repo, insights, job: new InsightsJobService(repo as never, insights as never) };
+  };
 
-      expect(await job.runMonthly()).toEqual({ month: '2026-10', generated: 2, failed: 1 });
-      const [start, end] = repo.findActiveUserIdsWithActivity.mock.calls[0];
-      expect([start.toISOString(), end.toISOString()]).toEqual(['2026-10-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z']);
-      expect(insights.generate.mock.calls).toEqual([['u1', '2026-10', { skipQuota: true }], ['u2', '2026-10', { skipQuota: true }], ['u3', '2026-10', { skipQuota: true }]]);
-    } finally {
-      jest.useRealTimers();
-    }
+  it('tanggal 1 (startDay 1): periode sebelumnya = bulan kalender, tanpa kuota, berurutan; satu kegagalan tidak menghentikan yang lain', async () => {
+    const t = build();
+    t.insights.generate.mockReset();
+    t.insights.generate.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('LLM down')).mockResolvedValueOnce({});
+    expect(await t.job.runDaily(day('2026-11-01'))).toEqual({ period: '2026-10', generated: 2, failed: 1 });
+    const [start, end, startDay] = t.repo.findActiveUserIdsWithActivity.mock.calls[0];
+    expect([start.toISOString(), end.toISOString(), startDay]).toEqual(['2026-10-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z', 1]);
+    expect(t.insights.generate.mock.calls).toEqual([['u1', '2026-10', { skipQuota: true }], ['u2', '2026-10', { skipQuota: true }], ['u3', '2026-10', { skipQuota: true }]]);
+  });
+
+  it('tanggal 25: hanya user dengan startDay 25, periode yang baru berakhir (25 Okt – 24 Nov = 2026-11)', async () => {
+    const t = build(['u9']);
+    expect(await t.job.runDaily(day('2026-11-25'))).toEqual({ period: '2026-11', generated: 1, failed: 0 });
+    const [start, end, startDay] = t.repo.findActiveUserIdsWithActivity.mock.calls[0];
+    expect([start.toISOString(), end.toISOString(), startDay]).toEqual(['2026-10-25T00:00:00.000Z', '2026-11-25T00:00:00.000Z', 25]);
+    expect(t.insights.generate).toHaveBeenCalledWith('u9', '2026-11', { skipQuota: true });
+  });
+
+  it('akhir tahun: 25 Des menghasilkan periode 2026-12 (25 Nov – 24 Des); 1 Jan menghasilkan 2026-12 untuk startDay 1', async () => {
+    const t = build(['u1']);
+    expect((await t.job.runDaily(day('2026-12-25'))).period).toBe('2026-12');
+    expect((await t.job.runDaily(day('2027-01-01'))).period).toBe('2026-12');
+  });
+
+  it('tanggal 29–31: tidak ada yang diproses (startDay maksimal 28)', async () => {
+    const t = build();
+    for (const d of ['2026-10-29', '2026-10-30', '2026-10-31']) expect(await t.job.runDaily(day(d))).toMatchObject({ generated: 0, failed: 0 });
+    expect(t.repo.findActiveUserIdsWithActivity).not.toHaveBeenCalled();
+  });
+
+  it('hari tanpa user yang memulai periode: tidak ada panggilan LLM', async () => {
+    const t = build([]);
+    expect(await t.job.runDaily(day('2026-10-14'))).toMatchObject({ generated: 0 });
+    expect(t.insights.generate).not.toHaveBeenCalled();
   });
 });

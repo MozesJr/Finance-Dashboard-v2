@@ -20,10 +20,10 @@ export class InsightsRepository {
     });
   }
 
-  /** User ACTIVE yang punya transaksi CONFIRMED dalam rentang (untuk job bulanan). */
-  async findActiveUserIdsWithActivity(start: Date, endExclusive: Date): Promise<string[]> {
+  /** User ACTIVE dengan tanggal mulai periode tertentu yang punya transaksi CONFIRMED dalam rentang (job harian). */
+  async findActiveUserIdsWithActivity(start: Date, endExclusive: Date, periodStartDay: number): Promise<string[]> {
     const users = await this.prisma.user.findMany({
-      where: { status: 'ACTIVE', transactions: { some: { status: 'CONFIRMED', date: { gte: start, lt: endExclusive } } } },
+      where: { status: 'ACTIVE', periodStartDay, transactions: { some: { status: 'CONFIRMED', date: { gte: start, lt: endExclusive } } } },
       select: { id: true },
       orderBy: { id: 'asc' },
     });

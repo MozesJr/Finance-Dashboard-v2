@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { getCurrentMonthJakarta, getMonthRange, shiftMonth } from 'shared';
+import { getPeriodRange, periodLabel, shiftMonth, toDateString } from 'shared';
+import type { PeriodInfo } from 'shared';
+import { PeriodsService } from '../periods/periods.service';
 import { percentChange, percentOf } from '../../common/percent';
 import { WalletsService } from '../wallets/wallets.service';
 import { DashboardRepository } from './dashboard.repository';
@@ -11,9 +13,18 @@ export interface MonthTotals {
   net: string;
 }
 
+/** Info periode untuk respons: key = bulan tempat periode berakhir, tanggal kalender YYYY-MM-DD. */
+const periodInfo = (key: string, startDay: number): PeriodInfo => {
+  const { start, endExclusive } = getPeriodRange(key, startDay);
+  return { key, label: periodLabel(key, startDay), start: toDateString(start), end: toDateString(new Date(endExclusive.getTime() - 86_400_000)) };
+};
+
 export interface SummaryResponse extends MonthTotals {
+  /** Kunci periode (YYYY-MM). Bernama "month" demi kompatibilitas API. */
   month: string;
   previousMonth: string;
+  period: PeriodInfo;
+  previousPeriod: PeriodInfo;
   previous: MonthTotals;
   /** Persentase perubahan vs bulan sebelumnya (1 desimal); null jika bulan sebelumnya 0. */
   change: { income: number | null; expense: number | null; net: number | null };
@@ -32,6 +43,7 @@ export interface ByCategoryItem {
 
 export interface ByCategoryResponse {
   month: string;
+  period: PeriodInfo;
   type: 'INCOME' | 'EXPENSE';
   total: string;
   items: ByCategoryItem[];
@@ -46,6 +58,7 @@ export interface PeriodReport {
 
 export interface TrendItem {
   month: string;
+  label: string;
   income: string;
   expense: string;
   net: string;
@@ -58,13 +71,14 @@ export class DashboardService {
   constructor(
     private repository: DashboardRepository,
     private wallets: WalletsService,
+    private periods: PeriodsService,
   ) {}
 
   async summary(userId: string, query: DashboardSummaryQuery): Promise<SummaryResponse> {
-    const month = query.month ?? getCurrentMonthJakarta();
+    const { key: month, startDay } = await this.periods.resolve(userId, query.month);
     const previousMonth = shiftMonth(month, -1);
-    const cur = getMonthRange(month);
-    const prev = getMonthRange(previousMonth);
+    const cur = getPeriodRange(month, startDay);
+    const prev = getPeriodRange(previousMonth, startDay);
 
     const [current, previous, activeWallets] = await Promise.all([
       this.repository.sumByType(userId, cur.start, cur.endExclusive),
@@ -79,6 +93,8 @@ export class DashboardService {
     return {
       month,
       previousMonth,
+      period: periodInfo(month, startDay),
+      previousPeriod: periodInfo(previousMonth, startDay),
       totalIncome: current.income.toString(),
       totalExpense: current.expense.toString(),
       net: curNet.toString(),
@@ -97,8 +113,8 @@ export class DashboardService {
   }
 
   async byCategory(userId: string, query: DashboardByCategoryQuery): Promise<ByCategoryResponse> {
-    const month = query.month ?? getCurrentMonthJakarta();
-    const { start, endExclusive } = getMonthRange(month);
+    const { key: month, startDay } = await this.periods.resolve(userId, query.month);
+    const { start, endExclusive } = getPeriodRange(month, startDay);
     const totals = await this.repository.totalsByCategory(userId, query.type, start, endExclusive);
     const infos = await this.repository.findCategories(
       totals.map((t) => t.categoryId).filter((id): id is string => id !== null),
@@ -124,7 +140,7 @@ export class DashboardService {
         return diff > 0n ? 1 : diff < 0n ? -1 : a.name.localeCompare(b.name);
       });
 
-    return { month, type: query.type, total: grand.toString(), items };
+    return { month, period: periodInfo(month, startDay), type: query.type, total: grand.toString(), items };
   }
 
   /** Ringkasan rentang tanggal arbitrer (hari ini, bulan ini, ...) + 3 kategori pengeluaran terbesar. */
@@ -154,7 +170,8 @@ export class DashboardService {
 
   /** Tambahan untuk insight: 3 pengeluaran terbesar dan hari paling boros dalam satu bulan. */
   async insightExtras(userId: string, month: string) {
-    const { start, endExclusive } = getMonthRange(month);
+    const { startDay } = await this.periods.resolve(userId, month);
+    const { start, endExclusive } = getPeriodRange(month, startDay);
     const [largest, peak] = await Promise.all([
       this.repository.largestExpenses(userId, start, endExclusive, 3),
       this.repository.peakSpendingDay(userId, start, endExclusive),
@@ -170,12 +187,13 @@ export class DashboardService {
   }
 
   async trend(userId: string, query: DashboardTrendQuery): Promise<{ months: TrendItem[] }> {
-    const last = getCurrentMonthJakarta();
+    const { key: last, startDay } = await this.periods.resolve(userId);
     const first = shiftMonth(last, -(query.months - 1));
     const rows = await this.repository.monthlyTotals(
       userId,
-      getMonthRange(first).start,
-      getMonthRange(last).endExclusive,
+      getPeriodRange(first, startDay).start,
+      getPeriodRange(last, startDay).endExclusive,
+      startDay,
     );
 
     const months: TrendItem[] = [];
@@ -185,7 +203,7 @@ export class DashboardService {
         rows.find((r) => r.month === month && r.type === type)?.total ?? 0n;
       const income = sum('INCOME');
       const expense = sum('EXPENSE');
-      months.push({ month, income: income.toString(), expense: expense.toString(), net: (income - expense).toString() });
+      months.push({ month, label: periodLabel(month, startDay), income: income.toString(), expense: expense.toString(), net: (income - expense).toString() });
     }
     return { months };
   }
