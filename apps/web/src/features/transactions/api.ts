@@ -1,9 +1,10 @@
 import http from '@/lib/http';
 import type { TxType } from 'shared';
+import type { AnyTxType } from './labels';
 
 export interface TransactionDto {
   id: string;
-  type: TxType;
+  type: AnyTxType;
   amount: string;
   status: string;
   date: string; // YYYY-MM-DD

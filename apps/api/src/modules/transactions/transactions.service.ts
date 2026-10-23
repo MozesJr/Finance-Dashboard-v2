@@ -277,7 +277,10 @@ export class TransactionsService {
     existing?: { walletId: string; toWalletId: string | null },
     options: { allowNoCategory?: boolean } = {},
   ): Promise<void> {
-    const problem = checkTransactionShape(data);
+    if (data.type === 'ADJUSTMENT') {
+      throw new ConflictException('Penyesuaian nilai pasar tidak bisa diubah. Hapus lalu perbarui nilai lagi dari halaman Dompet.');
+    }
+    const problem = checkTransactionShape({ ...data, type: data.type });
     const skippable = options.allowNoCategory && problem?.field === 'categoryId' && !data.categoryId;
     if (problem && !skippable) throw new BadRequestException(problem.message);
     if (data.amount <= 0n) throw new BadRequestException('Nominal harus lebih dari 0');

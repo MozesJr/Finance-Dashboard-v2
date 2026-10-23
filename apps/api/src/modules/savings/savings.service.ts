@@ -206,22 +206,28 @@ export class SavingsService {
     if (goal.isArchived) throw new BadRequestException('Goal sudah diarsipkan, kontribusi baru tidak bisa ditambahkan.');
     const date = input.date ? toDate(input.date) : getTodayInJakarta();
 
+    // Dompet penyimpanan: milik goal; untuk goal tanpa dompet boleh dipilih per transaksi (counterWalletId).
+    const storageWalletId = goal.walletId ?? input.counterWalletId ?? null;
     let transfer: { walletId: string; toWalletId: string } | null = null;
     if (input.walletId) {
-      if (!goal.walletId) {
+      if (!storageWalletId) {
         throw new BadRequestException(
-          'Goal ini belum punya dompet penyimpanan. Pilih dompet pada goal terlebih dahulu, atau kosongkan dompet sumber.',
+          input.type === 'DEPOSIT'
+            ? 'Pilih dompet tujuan untuk setoran ini, atau kosongkan dompet sumber.'
+            : 'Pilih dompet asal untuk penarikan ini, atau kosongkan dompet tujuan.',
         );
       }
-      if (input.walletId === goal.walletId) {
+      if (input.walletId === storageWalletId) {
         throw new BadRequestException('Dompet sumber/tujuan tidak boleh sama dengan dompet penyimpanan goal.');
       }
       await this.assertUsableWallet(userId, input.walletId);
-      await this.assertUsableWallet(userId, goal.walletId);
+      await this.assertUsableWallet(userId, storageWalletId);
       transfer =
         input.type === 'DEPOSIT'
-          ? { walletId: input.walletId, toWalletId: goal.walletId }
-          : { walletId: goal.walletId, toWalletId: input.walletId };
+          ? { walletId: input.walletId, toWalletId: storageWalletId }
+          : { walletId: storageWalletId, toWalletId: input.walletId };
+    } else if (!goal.walletId && input.counterWalletId) {
+      throw new BadRequestException('Dompet tujuan/asal harus berpasangan dengan dompet sumber/lawan.');
     }
 
     const created = await this.repository.runInGoalLock(userId, goalId, async (uow) => {

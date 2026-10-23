@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { HexColorSchema, MoneyInputSchema } from './common';
+import { DateStringSchema, HexColorSchema, MoneyInputSchema } from './common';
 
-export const WalletTypeEnum = z.enum(['CASH', 'BANK', 'EWALLET']);
+export const WalletTypeEnum = z.enum(['CASH', 'BANK', 'EWALLET', 'INVESTMENT']);
 export type WalletType = z.infer<typeof WalletTypeEnum>;
 
 export const CreateWalletSchema = z.object({
@@ -29,6 +29,23 @@ export const UpdateWalletSchema = z
 export type UpdateWalletInput = z.infer<typeof UpdateWalletSchema>;
 
 /** Bentuk response API (nominal sebagai string) */
+export const InvestmentInfoSchema = z.object({
+  /** saldo awal + transfer masuk − transfer keluar (tanpa penyesuaian nilai) */
+  capital: z.string(),
+  unrealized: z.string(),
+  /** persen terhadap modal; null bila modal ≤ 0 */
+  unrealizedPct: z.number().nullable(),
+  lastAdjustedAt: z.string().nullable(),
+});
+export type InvestmentInfo = z.infer<typeof InvestmentInfoSchema>;
+
+/** Input "Perbarui nilai": nilai pasar terkini dompet INVESTMENT (≥ 0). */
+export const WalletValuationSchema = z.object({
+  value: MoneyInputSchema,
+  date: DateStringSchema.optional(),
+});
+export type WalletValuationInput = z.infer<typeof WalletValuationSchema>;
+
 export const WalletSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -38,6 +55,7 @@ export const WalletSchema = z.object({
   isDefault: z.boolean(),
   initialBalance: z.string(),
   balance: z.string(),
+  investment: InvestmentInfoSchema.optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

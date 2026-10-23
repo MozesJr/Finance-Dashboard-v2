@@ -55,6 +55,8 @@ export interface ContributionPayload {
   date?: string;
   note?: string | null;
   walletId?: string | null;
+  /** Goal tanpa dompet penyimpanan: dompet tujuan (setor) / asal (tarik). */
+  counterWalletId?: string | null;
 }
 
 export type AllocationStatus = 'BELUM_ADA' | 'AMAN' | 'HAMPIR' | 'LEBIH' | 'KURANG' | 'TERCAPAI';

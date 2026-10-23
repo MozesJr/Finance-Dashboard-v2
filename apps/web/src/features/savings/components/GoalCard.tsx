@@ -3,12 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
+import { formatPct, formatSigned } from '@/features/wallets/labels';
+import type { InvestmentTotals } from '@/features/wallets/investment';
 import type { GoalDto } from '../api';
 import { ProgressBar } from './ProgressBar';
 
 interface Props {
   goal: GoalDto;
   emphasized?: boolean;
+  /** Total nilai pasar semua dompet INVESTMENT (hanya dipakai goal bertipe INVESTMENT). */
+  market?: InvestmentTotals | null;
   onDeposit: () => void;
   onWithdraw: () => void;
   onHistory: () => void;
@@ -29,7 +33,7 @@ function estimate(goal: GoalDto): string {
   return `± ${goal.estimatedMonths} bulan lagi`;
 }
 
-export function GoalCard({ goal, emphasized, onDeposit, onWithdraw, onHistory, onEdit, onToggleArchive }: Props) {
+export function GoalCard({ goal, emphasized, market, onDeposit, onWithdraw, onHistory, onEdit, onToggleArchive }: Props) {
   const percent = goal.percent ?? 0;
   const done = goal.percent !== null && goal.percent >= 100;
   const basis = targetBasis(goal);
@@ -95,6 +99,26 @@ export function GoalCard({ goal, emphasized, onDeposit, onWithdraw, onHistory, o
           <dd className="font-medium text-fg">{estimate(goal)}</dd>
         </div>
       </dl>
+
+      {goal.type === 'INVESTMENT' && market && (
+        <div className="rounded-md bg-surface-2 p-2 text-xs" data-testid="goal-market">
+          <p className="text-muted">
+            Modal tersetor <span className="font-medium text-fg">{formatMoney(goal.collected)}</span> · Nilai pasar dompet
+            investasi <span className="font-medium text-fg">{formatMoney(market.value)}</span>
+          </p>
+          {(() => {
+            const diff = BigInt(market.value) - BigInt(goal.collected);
+            return (
+              <p className={diff > 0n ? 'text-income' : diff < 0n ? 'text-expense' : 'text-muted'}>
+                {formatSigned(diff.toString(), formatMoney)}
+                {BigInt(goal.collected) > 0n &&
+                  ` (${formatPct(Math.round(Number((diff * 10000n) / BigInt(goal.collected))) / 100)})`}{' '}
+                dibanding modal tersetor
+              </p>
+            );
+          })()}
+        </div>
+      )}
 
       {basis && <p className="text-xs text-muted">Target: {basis}</p>}
       {goal.targetNote && <p className="text-xs text-warning">{goal.targetNote}</p>}

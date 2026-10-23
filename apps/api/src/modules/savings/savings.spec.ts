@@ -267,6 +267,59 @@ describe('SavingsService', () => {
       expect(repo.runInGoalLock).not.toHaveBeenCalled();
     });
 
+    describe('goal tanpa dompet penyimpanan (dompet dipilih per setoran/penarikan)', () => {
+      const W_INV = '33333333-3333-4333-8333-333333333333';
+      beforeEach(() => repo.findGoal.mockResolvedValue(goal({ walletId: null, wallet: null }) as never));
+
+      it('DEPOSIT: walletId = sumber, counterWalletId = tujuan → satu TRANSFER sumber → tujuan', async () => {
+        uow.createTransfer.mockResolvedValue('tx1');
+        uow.createContribution.mockResolvedValue(contribution({ transactionId: 'tx1' }) as never);
+        await service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1_000_000n, walletId: W_CASH, counterWalletId: W_INV });
+        expect(uow.createTransfer).toHaveBeenCalledWith(expect.objectContaining({ walletId: W_CASH, toWalletId: W_INV }));
+        expect(uow.createContribution).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 'tx1' }));
+      });
+
+      it('WITHDRAW: counterWalletId = dompet asal, walletId = tujuan → TRANSFER asal → tujuan', async () => {
+        uow.collected.mockResolvedValue(2_000_000n);
+        uow.createTransfer.mockResolvedValue('tx2');
+        uow.createContribution.mockResolvedValue(contribution({ type: 'WITHDRAW', transactionId: 'tx2' }) as never);
+        await service.addContribution('u1', 'g1', { type: 'WITHDRAW', amount: 1_000_000n, walletId: W_CASH, counterWalletId: W_INV });
+        expect(uow.createTransfer).toHaveBeenCalledWith(expect.objectContaining({ walletId: W_INV, toWalletId: W_CASH }));
+      });
+
+      it('counterWalletId tanpa walletId → 400, tidak ada tulisan', async () => {
+        await expect(
+          service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1n, counterWalletId: W_INV }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(repo.runInGoalLock).not.toHaveBeenCalled();
+      });
+
+      it('walletId tanpa counterWalletId → 400; dua dompet sama → 400', async () => {
+        await expect(service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1n, walletId: W_CASH })).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+          service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1n, walletId: W_CASH, counterWalletId: W_CASH }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it('tanpa keduanya → hanya kontribusi (perilaku lama)', async () => {
+        uow.createContribution.mockResolvedValue(contribution() as never);
+        await service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1_000_000n });
+        expect(uow.createTransfer).not.toHaveBeenCalled();
+      });
+    });
+
+    it('goal yang punya dompet mengabaikan counterWalletId (perilaku lama tetap)', async () => {
+      uow.createTransfer.mockResolvedValue('tx1');
+      uow.createContribution.mockResolvedValue(contribution({ transactionId: 'tx1' }) as never);
+      await service.addContribution('u1', 'g1', {
+        type: 'DEPOSIT',
+        amount: 1_000_000n,
+        walletId: W_CASH,
+        counterWalletId: '44444444-4444-4444-8444-444444444444',
+      });
+      expect(uow.createTransfer).toHaveBeenCalledWith(expect.objectContaining({ walletId: W_CASH, toWalletId: W_GOAL }));
+    });
+
     it('goal diarsipkan tidak menerima kontribusi baru', async () => {
       repo.findGoal.mockResolvedValue(goal({ isArchived: true }) as never);
       await expect(service.addContribution('u1', 'g1', { type: 'DEPOSIT', amount: 1n })).rejects.toBeInstanceOf(BadRequestException);

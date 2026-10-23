@@ -22,7 +22,7 @@ const buildTools = () => {
     trend: jest.fn().mockResolvedValue({ months: [{ month: '2026-10', income: '5000000', expense: '1287500', net: '3712500' }] }),
   };
   const transactions = { list: jest.fn().mockResolvedValue({ items: [], nextCursor: null }) };
-  const wallets = { list: jest.fn().mockResolvedValue([{ id: 'w1', name: 'BCA', type: 'BANK', balance: '6300000' }]) };
+  const wallets = { list: jest.fn().mockResolvedValue([{ id: 'w1', name: 'BCA', type: 'BANK', balance: '6300000' }]), investmentSummary: jest.fn() };
   const savings = { list: jest.fn().mockResolvedValue([{ name: 'Dana Darurat', type: 'EMERGENCY', collected: '1800000', target: '1500000', percent: 120, remaining: '0', estimatedMonths: 0 }]) };
   const allocation = { report: jest.fn().mockResolvedValue({ month: '2026-10', phase: 1, monthlyIncome: '10000000', items: [{ name: 'Kebutuhan', percent: 45, planned: '4500000', realized: '1252500', remaining: '3247500', status: 'AMAN' }] }) };
   const categories = { list: jest.fn().mockResolvedValue([{ id: 'cat-makan', name: 'Makan & Minum' }, { id: 'cat-trans', name: 'Transportasi' }]) };
@@ -31,9 +31,9 @@ const buildTools = () => {
 };
 
 describe('CHAT_TOOLS (definisi)', () => {
-  it('7 tool yang diminta; tidak ada parameter userId di mana pun', () => {
+  it('8 tool yang diminta; tidak ada parameter userId di mana pun', () => {
     expect(CHAT_TOOLS.map((t) => t.name)).toEqual([
-      'get_summary', 'get_spending_by_category', 'get_trend', 'search_transactions', 'get_wallet_balances', 'get_savings_status', 'get_allocation',
+      'get_summary', 'get_spending_by_category', 'get_trend', 'search_transactions', 'get_wallet_balances', 'get_investments', 'get_savings_status', 'get_allocation',
     ]);
     expect(JSON.stringify(CHAT_TOOLS).toLowerCase()).not.toContain('userid');
   });
@@ -263,5 +263,34 @@ describe('AiChatService', () => {
 describe('toPlainText', () => {
   it('menghapus penanda markdown umum', () => {
     expect(toPlainText('**tebal** dan __juga__ `kode`')).toBe('tebal dan juga kode');
+  });
+});
+
+describe('ChatToolsService: investasi dan penyesuaian', () => {
+  it('get_investments memformat ringkasan dari WalletsService (nilai, modal, untung/rugi)', async () => {
+    const t = buildTools();
+    t.wallets.investmentSummary.mockResolvedValue({
+      wallets: [{ id: 'w1', name: 'Ipot', value: '8700000', capital: '10000000', unrealized: '-1300000', unrealizedPct: -13, lastAdjustedAt: null }],
+      totalValue: '8700000',
+      totalCapital: '10000000',
+      totalUnrealized: '-1300000',
+      totalUnrealizedPct: -13,
+    });
+    const out = JSON.parse(await t.tools.execute('u1', 'get_investments', '{}'));
+    expect(t.wallets.investmentSummary).toHaveBeenCalledWith('u1');
+    expect(out.wallets[0]).toMatchObject({ name: 'Ipot', valueFormatted: 'Rp8.700.000', unrealizedFormatted: '-Rp1.300.000', unrealizedPercent: '-13,00%' });
+    expect(out.totalUnrealizedFormatted).toBe('-Rp1.300.000');
+  });
+
+  it('search_transactions menyembunyikan ADJUSTMENT', async () => {
+    const t = buildTools();
+    const base = { date: '2026-10-20', amount: '1000', wallet: { name: 'Ipot' }, category: null, merchant: null, note: null };
+    t.transactions.list.mockResolvedValue({
+      items: [{ ...base, type: 'ADJUSTMENT', amount: '-1300000' }, { ...base, type: 'EXPENSE' }],
+      nextCursor: null,
+    } as never);
+    const out = JSON.parse(await t.tools.execute('u1', 'search_transactions', '{}'));
+    expect(out.count).toBe(1);
+    expect(out.transactions.map((x: { type: string }) => x.type)).toEqual(['EXPENSE']);
   });
 });

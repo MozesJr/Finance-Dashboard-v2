@@ -39,7 +39,8 @@ export function TransactionForm({ transaction, submitting, error, onSubmit, onCa
   } = useForm<FormInput, unknown, FormOutput>({
     resolver: zodResolver(CreateTransactionSchema),
     defaultValues: {
-      type: transaction?.type ?? 'EXPENSE',
+      // Penyesuaian nilai tidak bisa diubah lewat form (tombol Ubah disembunyikan), jadi tipe form tidak pernah ADJUSTMENT.
+      type: transaction && transaction.type !== 'ADJUSTMENT' ? transaction.type : 'EXPENSE',
       walletId: transaction?.walletId ?? '',
       toWalletId: transaction?.toWalletId ?? null,
       categoryId: transaction?.categoryId ?? null,

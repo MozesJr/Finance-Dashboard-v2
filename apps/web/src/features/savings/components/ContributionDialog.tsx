@@ -33,11 +33,12 @@ export function ContributionDialog({ goal, type, onClose }: Props) {
     formState: { errors },
   } = useForm<FormInput, unknown, FormOutput>({
     resolver: zodResolver(CreateContributionSchema),
-    defaultValues: { type, amount: '', date: toDateString(getTodayInJakarta()), note: null, walletId: null },
+    defaultValues: { type, amount: '', date: toDateString(getTodayInJakarta()), note: null, walletId: null, counterWalletId: null },
   });
 
   const counterWallets = wallets?.filter((w) => w.id !== goal.walletId) ?? [];
-  const canTransfer = goal.walletId !== null;
+  // Goal tanpa dompet penyimpanan: dompet tempat dana disimpan dipilih per transaksi.
+  const pickStorage = goal.walletId === null;
 
   const submit = (data: FormOutput) =>
     add.mutate(
@@ -48,7 +49,8 @@ export function ContributionDialog({ goal, type, onClose }: Props) {
           amount: data.amount.toString(),
           date: data.date,
           note: data.note || null,
-          walletId: canTransfer ? (data.walletId ?? null) : null,
+          walletId: data.walletId ?? null,
+          ...(pickStorage ? { counterWalletId: data.counterWalletId ?? null } : {}),
         },
       },
       {
@@ -74,7 +76,7 @@ export function ContributionDialog({ goal, type, onClose }: Props) {
           </div>
           <div>
             <Label htmlFor="c-wallet">{isDeposit ? 'Sumber dana (dompet)' : 'Tujuan dana (dompet)'}</Label>
-            <Select id="c-wallet" disabled={!canTransfer} {...register('walletId', { setValueAs: emptyToNull })}>
+            <Select id="c-wallet" {...register('walletId', { setValueAs: emptyToNull })}>
               <option value="">Tidak dicatat sebagai transfer</option>
               {counterWallets.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -83,12 +85,27 @@ export function ContributionDialog({ goal, type, onClose }: Props) {
               ))}
             </Select>
             <p className="mt-1 text-xs text-muted">
-              {canTransfer
-                ? `Jika dipilih, transfer antara dompet ini dan ${goal.wallet?.name} dicatat otomatis.`
-                : 'Goal ini belum punya dompet penyimpanan. Atur lewat "Ubah goal" untuk mencatat transfer otomatis.'}
+              {pickStorage
+                ? 'Kosongkan jika tidak perlu mencatat perpindahan dana.'
+                : `Jika dipilih, transfer antara dompet ini dan ${goal.wallet?.name} dicatat otomatis.`}
             </p>
             <FieldError message={errors.walletId?.message} />
           </div>
+          {pickStorage && (
+            <div>
+              <Label htmlFor="c-counter">{isDeposit ? 'Dompet tujuan (tempat dana disimpan)' : 'Dompet asal (tempat dana disimpan)'}</Label>
+              <Select id="c-counter" {...register('counterWalletId', { setValueAs: emptyToNull })}>
+                <option value="">Tidak dicatat sebagai transfer</option>
+                {counterWallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">Isi bersama dompet di atas; keduanya dicatat sebagai satu transfer.</p>
+              <FieldError message={errors.counterWalletId?.message} />
+            </div>
+          )}
           <div>
             <Label htmlFor="c-date">Tanggal</Label>
             <Input id="c-date" type="date" {...register('date')} />

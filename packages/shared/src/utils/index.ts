@@ -5,3 +5,4 @@ export * from './tx-parser';
 export * from './receipt';
 export * from './question';
 export * from './insight';
+export * from './investment';

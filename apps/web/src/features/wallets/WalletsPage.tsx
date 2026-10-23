@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, ArchiveRestore, Banknote, Landmark, Pencil, Plus, Smartphone, Star, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Banknote, Landmark, Pencil, Plus, RefreshCw, Smartphone, Star, Trash2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,10 +13,16 @@ import { getErrorMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { useCreateWallet, useDeleteWallet, useUpdateWallet, useWallets } from './hooks';
 import { WalletForm } from './components/WalletForm';
-import { walletTypeLabel } from './labels';
+import { formatPct, formatSigned, walletTypeLabel } from './labels';
+import { ValuationDialog } from './components/ValuationDialog';
+import { investmentTotals } from './investment';
 import type { WalletDto } from './api';
 
-const TYPE_ICONS = { CASH: Banknote, BANK: Landmark, EWALLET: Smartphone } as const;
+const TYPE_ICONS = { CASH: Banknote, BANK: Landmark, EWALLET: Smartphone, INVESTMENT: TrendingUp } as const;
+
+const gainClass = (v: string) => (BigInt(v) > 0n ? 'text-income' : BigInt(v) < 0n ? 'text-expense' : 'text-muted');
+
+const formatDate = (iso: string) => iso.slice(0, 10);
 
 type FormState = { mode: 'create' } | { mode: 'edit'; wallet: WalletDto } | null;
 
@@ -24,11 +30,14 @@ export function WalletsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState<FormState>(null);
   const [toDelete, setToDelete] = useState<WalletDto | null>(null);
+  const [valuing, setValuing] = useState<WalletDto | null>(null);
 
   const { data: wallets, isLoading, error, refetch } = useWallets(showArchived);
   const create = useCreateWallet();
   const update = useUpdateWallet();
   const remove = useDeleteWallet();
+
+  const totals = investmentTotals(wallets ?? []);
 
   const closeForm = () => {
     setForm(null);
@@ -85,6 +94,20 @@ export function WalletsPage() {
         Tampilkan yang diarsipkan
       </label>
 
+      {totals && (
+        <Card className="mb-4" data-testid="investment-summary">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Total investasi</p>
+          <p className="mt-1 text-2xl font-bold text-fg">{formatMoney(totals.value)}</p>
+          <p className="mt-1 text-sm text-muted">
+            Modal {formatMoney(totals.capital)} ·{' '}
+            <span className={gainClass(totals.unrealized)}>
+              {formatSigned(totals.unrealized, formatMoney)}
+              {totals.unrealizedPct !== null && ` (${formatPct(totals.unrealizedPct)})`}
+            </span>
+          </p>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => (
@@ -123,7 +146,28 @@ export function WalletsPage() {
                 <p className={cn('text-2xl font-bold', BigInt(w.balance) < 0n ? 'text-expense' : 'text-fg')}>
                   {formatMoney(w.balance)}
                 </p>
-                <div className="flex gap-1">
+                {w.investment && (
+                  <div className="space-y-1 text-sm" data-testid="investment-card">
+                    <p className="text-muted">
+                      Modal <span className="text-fg">{formatMoney(w.investment.capital)}</span>
+                    </p>
+                    <p className={gainClass(w.investment.unrealized)}>
+                      {BigInt(w.investment.unrealized) > 0n ? 'Untung' : BigInt(w.investment.unrealized) < 0n ? 'Rugi' : 'Impas'}{' '}
+                      {formatSigned(w.investment.unrealized, formatMoney)}
+                      {w.investment.unrealizedPct !== null && ` (${formatPct(w.investment.unrealizedPct)})`}
+                      <span className="text-xs text-muted"> · belum direalisasi</span>
+                    </p>
+                    <p className="text-xs text-muted">
+                      {w.investment.lastAdjustedAt ? `Diperbarui ${formatDate(w.investment.lastAdjustedAt)}` : 'Belum pernah diperbarui'}
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-1">
+                  {w.type === 'INVESTMENT' && !w.isArchived && (
+                    <Button variant="ghost" size="sm" onClick={() => setValuing(w)}>
+                      <RefreshCw className="h-3 w-3" /> Perbarui nilai
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => setForm({ mode: 'edit', wallet: w })}>
                     <Pencil className="h-3 w-3" /> Ubah
                   </Button>
@@ -173,6 +217,14 @@ export function WalletsPage() {
                 else update.mutate({ id: form.wallet.id, payload }, done);
               }}
             />
+          </DialogContent>
+        )}
+      </Dialog>
+
+      <Dialog open={valuing !== null} onOpenChange={(o) => !o && setValuing(null)}>
+        {valuing && (
+          <DialogContent title={`Perbarui nilai ${valuing.name}`}>
+            <ValuationDialog wallet={valuing} onClose={() => setValuing(null)} />
           </DialogContent>
         )}
       </Dialog>

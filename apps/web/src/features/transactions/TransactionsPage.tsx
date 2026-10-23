@@ -25,6 +25,15 @@ const formatDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 function Amount({ tx }: { tx: TransactionDto }) {
+  if (tx.type === 'ADJUSTMENT') {
+    const n = BigInt(tx.amount);
+    return (
+      <span className={cn('font-semibold tabular-nums', n >= 0n ? 'text-income' : 'text-expense')}>
+        {n > 0n ? '+' : ''}
+        {formatMoney(n)}
+      </span>
+    );
+  }
   return (
     <span className={cn('font-semibold tabular-nums', TX_TYPE_CLASS[tx.type])}>
       {TX_TYPE_SIGN[tx.type]}
@@ -38,6 +47,13 @@ function Title({ tx }: { tx: TransactionDto }) {
     return (
       <span className="inline-flex items-center gap-1">
         {tx.wallet.name} <ArrowRight className="h-3 w-3" /> {tx.toWallet?.name ?? '—'}
+      </span>
+    );
+  }
+  if (tx.type === 'ADJUSTMENT') {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">Penyesuaian nilai</span>
       </span>
     );
   }
@@ -84,9 +100,11 @@ export function TransactionsPage() {
           <Receipt className="h-4 w-4" />
         </Button>
       )}
-      <Button variant="ghost" size="icon" aria-label="Ubah transaksi" onClick={() => setForm({ mode: 'edit', transaction: tx })}>
-        <Pencil className="h-4 w-4" />
-      </Button>
+      {tx.type !== 'ADJUSTMENT' && (
+        <Button variant="ghost" size="icon" aria-label="Ubah transaksi" onClick={() => setForm({ mode: 'edit', transaction: tx })}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" aria-label="Hapus transaksi" onClick={() => setToDelete(tx)}>
         <Trash2 className="h-4 w-4" />
       </Button>

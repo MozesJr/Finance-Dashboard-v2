@@ -137,6 +137,17 @@ describe('TransactionsService', () => {
     expect(repo.delete).not.toHaveBeenCalled();
   });
 
+  it('ADJUSTMENT: tidak bisa dibuat lewat skema create, tidak bisa diubah (409), tetapi boleh dihapus', async () => {
+    expect(
+      CreateTransactionSchema.safeParse({ type: 'ADJUSTMENT', walletId: W1, amount: 1000, categoryId: 'x' }).success,
+    ).toBe(false);
+    repo.findById.mockResolvedValue(row({ type: 'ADJUSTMENT', amount: -1_300_000n, categoryId: null, category: null }) as never);
+    await expect(service.update('u1', 't1', { note: 'ubah' } as never)).rejects.toBeInstanceOf(ConflictException);
+    expect(repo.update).not.toHaveBeenCalled();
+    await service.remove('u1', 't1');
+    expect(repo.delete).toHaveBeenCalledWith('u1', 't1');
+  });
+
   it('list: limit+1 diminta, nextCursor terisi bila ada halaman berikut', async () => {
     const rows = [row({ id: 'c' }), row({ id: 'b' }), row({ id: 'a' })];
     repo.findPage.mockResolvedValue(rows as never);

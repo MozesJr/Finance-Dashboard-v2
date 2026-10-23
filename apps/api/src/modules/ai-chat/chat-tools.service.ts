@@ -67,6 +67,11 @@ export const CHAT_TOOLS: ToolDefinition[] = [
     },
   },
   { name: 'get_wallet_balances', description: 'Saldo setiap dompet aktif dan totalnya.', parameters: { type: 'object', properties: {} } },
+  {
+    name: 'get_investments',
+    description: 'Nilai terkini, modal, dan untung/rugi belum direalisasi per dompet investasi, beserta total. Penyesuaian nilai pasar BUKAN pemasukan/pengeluaran.',
+    parameters: { type: 'object', properties: {} },
+  },
   { name: 'get_savings_status', description: 'Progres goal tabungan: terkumpul, target, persen, estimasi bulan.', parameters: { type: 'object', properties: {} } },
   {
     name: 'get_allocation',
@@ -108,6 +113,9 @@ export class ChatToolsService {
         case 'get_wallet_balances':
           NoArgs.parse(args);
           return this.out(await this.walletBalances(userId));
+        case 'get_investments':
+          NoArgs.parse(args);
+          return this.out(await this.investments(userId));
         case 'get_savings_status':
           NoArgs.parse(args);
           return this.out(await this.savingsStatus(userId));
@@ -164,6 +172,25 @@ export class ChatToolsService {
     };
   }
 
+  private async investments(userId: string) {
+    const s = await this.wallets.investmentSummary(userId);
+    const pct = (v: number | null) => (v === null ? null : `${v.toFixed(2).replace('.', ',')}%`);
+    return {
+      wallets: s.wallets.map((w) => ({
+        name: w.name,
+        valueFormatted: rp(w.value),
+        capitalFormatted: rp(w.capital),
+        unrealizedFormatted: rp(w.unrealized),
+        unrealizedPercent: pct(w.unrealizedPct),
+        lastUpdated: w.lastAdjustedAt,
+      })),
+      totalValueFormatted: rp(s.totalValue),
+      totalCapitalFormatted: rp(s.totalCapital),
+      totalUnrealizedFormatted: rp(s.totalUnrealized),
+      totalUnrealizedPercent: pct(s.totalUnrealizedPct),
+    };
+  }
+
   private async search(userId: string, a: z.infer<typeof SearchArgs>) {
     const limit = Math.min(a.limit ?? 10, MAX_SEARCH_ROWS);
     let categoryId: string | undefined;
@@ -189,10 +216,12 @@ export class ChatToolsService {
       q: a.q,
       limit,
     });
+    // Penyesuaian nilai pasar bukan pemasukan/pengeluaran: tidak ikut hasil pencarian.
+    const items = page.items.filter((t) => t.type !== 'ADJUSTMENT');
     return {
-      count: page.items.length,
+      count: items.length,
       hasMore: page.nextCursor !== null,
-      transactions: page.items.map((t) => ({
+      transactions: items.map((t) => ({
         date: t.date,
         type: t.type,
         amountFormatted: rp(t.amount),

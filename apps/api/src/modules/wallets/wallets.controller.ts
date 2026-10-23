@@ -11,6 +11,8 @@ import {
   UpdateWalletSchema,
   WalletListQuery,
   WalletListQuerySchema,
+  WalletValuationInput,
+  WalletValuationSchema,
 } from './dto/wallet.dto';
 
 @Controller('wallets')
@@ -23,6 +25,26 @@ export class WalletsController {
     @Query(new ZodValidationPipe(WalletListQuerySchema)) query: WalletListQuery,
   ) {
     return this.walletsService.list(user.userId, query.includeArchived);
+  }
+
+  /** Didaftarkan sebelum ':id' agar "investments" tidak dianggap id. */
+  @Get('investments/summary')
+  investmentSummary(@CurrentUser() user: CurrentUserData) {
+    return this.walletsService.investmentSummary(user.userId);
+  }
+
+  @Get(':id/valuations')
+  valuations(@CurrentUser() user: CurrentUserData, @Param('id', parseUuid()) id: string) {
+    return this.walletsService.listValuations(user.userId, id);
+  }
+
+  @Post(':id/valuation')
+  setValuation(
+    @CurrentUser() user: CurrentUserData,
+    @Param('id', parseUuid()) id: string,
+    @Body(new ZodValidationPipe(WalletValuationSchema)) body: WalletValuationInput,
+  ) {
+    return this.walletsService.setValuation(user.userId, id, body);
   }
 
   @Get(':id')

@@ -64,6 +64,11 @@ export const CreateContributionSchema = z.object({
   date: DateStringSchema.optional(),
   note: NoteSchema.nullable().optional(),
   walletId: UuidSchema.nullable().optional(),
+  /**
+   * Hanya untuk goal TANPA dompet penyimpanan: dompet tujuan (Setor) / dompet asal (Tarik).
+   * Wajib berpasangan dengan walletId; keduanya terisi → TRANSFER atomik.
+   */
+  counterWalletId: UuidSchema.nullable().optional(),
 });
 export type CreateContributionInput = z.infer<typeof CreateContributionSchema>;
 

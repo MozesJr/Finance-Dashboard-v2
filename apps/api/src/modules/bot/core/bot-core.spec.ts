@@ -1,11 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { getTodayInJakarta, toDateString } from 'shared';
+import { getTodayInJakarta, investmentMetrics, toDateString } from 'shared';
 import { AiQuotaError, AiUnavailableError } from '../../ai/ai.errors';
 import { UsageMeter } from '../../ai/usage-meter';
 import { BotCore } from './bot-core.service';
 import { ChatHandler } from './handlers/chat.handler';
 import { InsightHandler } from './handlers/insight.handler';
+import { InvestmentHandler } from './handlers/investment.handler';
 import { ReceiptHandler } from './handlers/receipt.handler';
 import { LinkLockout, LINK_LOCK_MS } from './link-lockout';
 import { DraftCallbackHandler } from './handlers/draft-callback.handler';
@@ -34,9 +35,23 @@ interface FakeTx {
   receiptId: string | null;
 }
 
-const WALLETS = [
+interface FakeWallet {
+  id: string;
+  name: string;
+  balance: string;
+  isDefault: boolean;
+  type?: string;
+  /** Hanya dompet INVESTMENT: modal (tanpa penyesuaian nilai). */
+  capital?: string;
+  investment?: { capital: string; unrealized: string; unrealizedPct: number | null; lastAdjustedAt: string | null };
+}
+const WALLETS: FakeWallet[] = [
   { id: 'w-bca', name: 'BCA', balance: '6300000', isDefault: false },
   { id: 'w-gopay', name: 'GoPay', balance: '150000', isDefault: false },
+];
+const INVEST_WALLETS: FakeWallet[] = [
+  { id: 'w-ipot', name: 'Ipot', type: 'INVESTMENT', balance: '10000000', capital: '10000000', isDefault: false },
+  { id: 'w-reku', name: 'Reku', type: 'INVESTMENT', balance: '5000000', capital: '5000000', isDefault: false },
 ];
 const CATEGORIES = [
   { id: 'cat-expense-makan', name: 'Makan & Minum', icon: '🍽️', type: 'EXPENSE' },
@@ -45,7 +60,7 @@ const CATEGORIES = [
   { id: 'cat-income-gaji', name: 'Gaji', icon: '💼', type: 'INCOME' },
 ];
 
-function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS } = {}) {
+function buildWorld(options: { defaultWallet?: string; wallets?: FakeWallet[] } = {}) {
   const wallets = (options.wallets ?? WALLETS).map((w) => ({ ...w, isDefault: w.id === options.defaultWallet }));
   const txs: FakeTx[] = [];
   const rules: Array<{ userId: string; pattern: string; categoryId: string }> = [];
@@ -144,7 +159,36 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     }),
   };
 
-  const walletsService = { list: jest.fn(async () => wallets) };
+  const withInvestment = (w: FakeWallet): FakeWallet => {
+    if (w.type !== 'INVESTMENT') return w;
+    const m = investmentMetrics(BigInt(w.balance), BigInt(w.capital ?? '0'));
+    return { ...w, investment: { capital: w.capital ?? '0', unrealized: m.unrealized.toString(), unrealizedPct: m.unrealizedPct, lastAdjustedAt: null } };
+  };
+  const walletsService = {
+    list: jest.fn(async () => wallets.map(withInvestment)),
+    investmentSummary: jest.fn(async () => {
+      const inv = wallets.filter((w) => w.type === 'INVESTMENT').map(withInvestment);
+      const totalValue = inv.reduce((a, w) => a + BigInt(w.balance), 0n);
+      const totalCapital = inv.reduce((a, w) => a + BigInt(w.capital ?? '0'), 0n);
+      const t = investmentMetrics(totalValue, totalCapital);
+      return {
+        wallets: inv.map((w) => ({ id: w.id, name: w.name, value: w.balance, capital: w.investment!.capital, unrealized: w.investment!.unrealized, unrealizedPct: w.investment!.unrealizedPct, lastAdjustedAt: null })),
+        totalValue: totalValue.toString(),
+        totalCapital: totalCapital.toString(),
+        totalUnrealized: t.unrealized.toString(),
+        totalUnrealizedPct: t.unrealizedPct,
+      };
+    }),
+    setValuation: jest.fn(async (_userId: string, id: string, input: { value: bigint }) => {
+      const w = wallets.find((x) => x.id === id);
+      if (!w) throw new NotFoundException('Wallet tidak ditemukan');
+      if (w.type !== 'INVESTMENT') throw new BadRequestException('Perbarui nilai hanya untuk dompet bertipe Investasi.');
+      const delta = input.value - BigInt(w.balance);
+      if (delta === 0n) return { wallet: withInvestment(w), adjustment: null };
+      w.balance = input.value.toString();
+      return { wallet: withInvestment(w), adjustment: { id: randomUUID(), amount: delta.toString() } };
+    }),
+  };
   const categoriesService = { list: jest.fn(async (_u: string, type?: string) => CATEGORIES.filter((c) => !type || c.type === type)) };
   const rulesService = {
     list: jest.fn(async (userId: string) => rules.filter((r) => r.userId === userId).map((r) => ({ pattern: r.pattern, categoryId: r.categoryId }))),
@@ -250,7 +294,8 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
   const receiptHandler = new ReceiptHandler(receiptsSvc as never, transactions as never, walletsService as never, pending as never);
   const reports = new ReportsHandler(walletsService as never, dashboard as never, savings as never, allocation as never);
   const lockout = new LinkLockout();
-  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler);
+  const investmentHandler = new InvestmentHandler(walletsService as never);
+  const core = new BotCore(linkService as never, inputHandler, callbacks, reports, transactions as never, pending as never, lockout, receiptHandler, chatHandler, insightHandler, investmentHandler);
 
   const link = (chatId: string, userId: string, status: Status = 'ACTIVE') => links.set(chatId, { userId, status });
   const chat = (chatId: string, userId?: string, status: Status = 'ACTIVE') => {
@@ -258,7 +303,7 @@ function buildWorld(options: { defaultWallet?: string; wallets?: typeof WALLETS 
     return new FakeChannelAdapter(core, chatId);
   };
 
-  return { core, lockout, ai, aiUsage, receiptsSvc, chatSvc, insightSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
+  return { core, lockout, walletsService, ai, aiUsage, receiptsSvc, chatSvc, insightSvc, txs, rules, pendings, links, codes, transactions, linkService, pending, chat, link, dashboard };
 }
 
 const today = () => toDateString(getTodayInJakarta());
@@ -1043,6 +1088,96 @@ describe('BotCore', () => {
       expect(w.txs).toHaveLength(1);
       expect(w.txs[0].status).toBe('CONFIRMED');
       expect((await bot.say('/batal'))[0].text).toContain('Tidak ada draft');
+    });
+  });
+
+  describe('investasi', () => {
+    const world = () => buildWorld({ wallets: [...WALLETS, ...INVEST_WALLETS] });
+
+    it('/investasi: nilai, modal, untung/rugi per dompet + total (hijau/merah)', async () => {
+      const w = world();
+      const bot = w.chat('c1', 'u1');
+      await w.walletsService.setValuation('u1', 'w-ipot', { value: 8_700_000n });
+      const [msg] = await bot.say('/investasi');
+      expect(msg.text).toContain('🔴 Ipot: Rp8.700.000');
+      expect(msg.text).toContain('Modal Rp10.000.000 · -Rp1.300.000 (-13,00%)');
+      expect(msg.text).toContain('⚪ Reku: Rp5.000.000');
+      expect(msg.text).toContain('Total nilai: Rp13.700.000');
+      expect(msg.text).toContain('Total modal: Rp15.000.000');
+      expect(msg.text).toContain('Untung/rugi: -Rp1.300.000 (-8,67%)');
+    });
+
+    it('/investasi tanpa dompet INVESTMENT → petunjuk, tanpa error', async () => {
+      const w = buildWorld();
+      expect((await w.chat('c1', 'u1').say('/investasi'))[0].text).toContain('Belum ada dompet bertipe Investasi');
+    });
+
+    it('"update ipot 8,7jt" → preview dengan Simpan/Batal; belum mengubah apa pun; Simpan menerapkan', async () => {
+      const w = world();
+      const bot = w.chat('c1', 'u1');
+      const [msg] = await bot.say('update ipot 8,7jt');
+      expect(msg.text).toContain('Sekarang: Rp10.000.000');
+      expect(msg.text).toContain('Baru: Rp8.700.000');
+      expect(msg.text).toContain('Selisih: -Rp1.300.000');
+      expect(msg.text).toContain('bukan pemasukan/pengeluaran');
+      expect(w.walletsService.setValuation).not.toHaveBeenCalled();
+      expect(w.txs).toHaveLength(0);
+
+      await bot.press(bot.lastButtonData[0]);
+      expect(w.walletsService.setValuation).toHaveBeenCalledWith('u1', 'w-ipot', { value: 8_700_000n });
+      expect(bot.last.text).toContain('Nilai Ipot diperbarui: Rp8.700.000 (-Rp1.300.000)');
+      expect(w.txs).toHaveLength(0);
+    });
+
+    it('menekan Simpan dua kali tidak membuat penyesuaian ganda (idempoten)', async () => {
+      const w = world();
+      const bot = w.chat('c1', 'u1');
+      await bot.say('nilai reku 4,6jt');
+      const data = bot.lastButtonData[0];
+      await bot.press(data);
+      await bot.press(data);
+      expect(bot.last.text).toContain('sudah Rp4.600.000');
+    });
+
+    it('nilai sama dengan sekarang → "Tidak ada perubahan", tanpa tombol', async () => {
+      const w = world();
+      const [msg] = await w.chat('c1', 'u1').say('update ipot 10jt');
+      expect(msg.text).toContain('Tidak ada perubahan');
+      expect(msg.buttons).toHaveLength(0);
+    });
+
+    it('Batal tidak mengubah apa pun', async () => {
+      const w = world();
+      const bot = w.chat('c1', 'u1');
+      await bot.say('update ipot 1jt');
+      await bot.press('ix');
+      expect(bot.last.text).toBe('Dibatalkan.');
+      expect(w.walletsService.setValuation).not.toHaveBeenCalled();
+    });
+
+    it('nama dompet tidak cocok → daftar dompet investasi; dompet bukan INVESTMENT (BCA) tidak diubah', async () => {
+      const w = world();
+      const bot = w.chat('c1', 'u1');
+      expect((await bot.say('update xyz 1jt'))[0].text).toContain('Pilihan: Ipot, Reku');
+      const [msg] = await bot.say('update bca 1jt');
+      expect(msg.text).toContain('Pilihan: Ipot, Reku');
+      expect(w.walletsService.setValuation).not.toHaveBeenCalled();
+    });
+
+    it('tanpa dompet INVESTMENT atau tanpa nominal valid → diteruskan ke alur transaksi biasa', async () => {
+      const w = buildWorld({ defaultWallet: 'w-bca' });
+      const [msg] = await w.chat('c1', 'u1').say('update status kantor 35rb');
+      expect(msg.text).toContain('Draft transaksi');
+    });
+
+    it('callback valuasi dari chat belum terhubung ditolak; callback rusak → tidak berlaku', async () => {
+      const w = world();
+      const anon = w.chat('c9');
+      await anon.press('iv:w-ipot:1');
+      expect(anon.last.text).toContain('belum terhubung');
+      const bot = w.chat('c1', 'u1');
+      await bot.press('iv:w-ipot:abc');
+      expect(bot.last.text).toContain('sudah tidak berlaku');
     });
   });
 

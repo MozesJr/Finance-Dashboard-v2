@@ -31,6 +31,9 @@ describe('WalletsService', () => {
       getBalanceDeltas: jest.fn(),
       setDefault: jest.fn(),
       findDefault: jest.fn(),
+      getInvestmentStats: jest.fn().mockResolvedValue({ capitalDeltas: new Map(), lastAdjusted: new Map() }),
+      applyValuation: jest.fn(),
+      listAdjustments: jest.fn(),
     } as unknown as jest.Mocked<WalletsRepository>;
     service = new WalletsService(repo);
   });
@@ -118,6 +121,69 @@ describe('WalletsService', () => {
       repo.getBalanceDeltas.mockResolvedValue(new Map());
       await service.create('u1', { name: 'a', type: 'BANK', initialBalance: 0n, isDefault: true });
       expect(repo.setDefault).toHaveBeenCalledWith('u1', 'a');
+    });
+  });
+
+  describe('investasi', () => {
+    const inv = (id: string, initial: bigint, over: Record<string, unknown> = {}) => ({ ...wallet(id, initial), type: 'INVESTMENT', ...over });
+
+    it('dompet INVESTMENT: nilai = saldo, modal = saldo awal + transfer masuk − keluar, untung/rugi dari selisih', async () => {
+      repo.findAll.mockResolvedValue([inv('ipot', 1_000_000n)] as never);
+      // saldo: transfer masuk 9jt (modal) + penyesuaian −1,3jt → mutasi 7,7jt
+      repo.getBalanceDeltas.mockResolvedValue(new Map([['ipot', 7_700_000n]]));
+      repo.getInvestmentStats.mockResolvedValue({
+        capitalDeltas: new Map([['ipot', 9_000_000n]]),
+        lastAdjusted: new Map([['ipot', new Date('2026-10-20T03:00:00Z')]]),
+      });
+      const [w] = await service.list('u1');
+      expect(w.balance).toBe('8700000');
+      expect(w.investment).toEqual({ capital: '10000000', unrealized: '-1300000', unrealizedPct: -13, lastAdjustedAt: '2026-10-20T03:00:00.000Z' });
+    });
+
+    it('dompet non-INVESTMENT tidak mendapat blok investment dan tidak memicu query statistik', async () => {
+      repo.findAll.mockResolvedValue([wallet('a', 1n)] as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map());
+      const [w] = await service.list('u1');
+      expect(w.investment).toBeUndefined();
+      expect(repo.getInvestmentStats).not.toHaveBeenCalled();
+    });
+
+    it('setValuation: hanya dompet INVESTMENT aktif; selain itu 400 dan tidak menulis', async () => {
+      repo.findById.mockResolvedValue(wallet('a', 0n) as never);
+      await expect(service.setValuation('u1', 'a', { value: 5n })).rejects.toBeInstanceOf(BadRequestException);
+      repo.findById.mockResolvedValue(inv('b', 0n, { isArchived: true }) as never);
+      await expect(service.setValuation('u1', 'b', { value: 5n })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.applyValuation).not.toHaveBeenCalled();
+    });
+
+    it('setValuation membuat penyesuaian dan mengembalikan dompet terbaru; nilai sama → adjustment null', async () => {
+      repo.findById.mockResolvedValue(inv('ipot', 0n) as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map([['ipot', 8_700_000n]]));
+      repo.applyValuation.mockResolvedValueOnce({ id: 'adj1', amount: -1_300_000n, previousBalance: 10_000_000n });
+      const res = await service.setValuation('u1', 'ipot', { value: 8_700_000n, date: '2026-10-22' });
+      expect(repo.applyValuation).toHaveBeenCalledWith('u1', 'ipot', 8_700_000n, new Date('2026-10-22T00:00:00Z'), 'Penyesuaian nilai pasar');
+      expect(res.adjustment).toMatchObject({ id: 'adj1', amount: '-1300000', date: '2026-10-22' });
+      expect(res.wallet.balance).toBe('8700000');
+
+      repo.applyValuation.mockResolvedValueOnce(null);
+      expect((await service.setValuation('u1', 'ipot', { value: 8_700_000n })).adjustment).toBeNull();
+    });
+
+    it('dompet milik user lain → 404', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.setValuation('u1', 'x', { value: 1n })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('investmentSummary: total nilai, modal, untung/rugi dan persen; mengabaikan non-INVESTMENT', async () => {
+      repo.findAll.mockResolvedValue([inv('ipot', 0n), inv('reku', 0n), wallet('bca', 5_000_000n)] as never);
+      repo.getBalanceDeltas.mockResolvedValue(new Map([['ipot', 8_700_000n], ['reku', 4_600_000n]]));
+      repo.getInvestmentStats.mockResolvedValue({
+        capitalDeltas: new Map([['ipot', 10_000_000n], ['reku', 5_000_000n]]),
+        lastAdjusted: new Map(),
+      });
+      const s = await service.investmentSummary('u1');
+      expect(s.wallets.map((w) => w.id)).toEqual(['ipot', 'reku']);
+      expect(s).toMatchObject({ totalValue: '13300000', totalCapital: '15000000', totalUnrealized: '-1700000', totalUnrealizedPct: -11.33 });
     });
   });
 });

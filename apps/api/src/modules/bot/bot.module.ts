@@ -18,6 +18,7 @@ import { LinkLockout } from './core/link-lockout';
 import { DraftCallbackHandler } from './core/handlers/draft-callback.handler';
 import { ChatHandler } from './core/handlers/chat.handler';
 import { InputHandler } from './core/handlers/input.handler';
+import { InvestmentHandler } from './core/handlers/investment.handler';
 import { InsightHandler } from './core/handlers/insight.handler';
 import { ReceiptHandler } from './core/handlers/receipt.handler';
 import { ReportsHandler } from './core/handlers/reports.handler';
@@ -49,6 +50,7 @@ const devControllers = process.env.NODE_ENV === 'development' ? [DevBotControlle
     ReceiptHandler,
     ChatHandler,
     InsightHandler,
+    InvestmentHandler,
     DraftCallbackHandler,
     ReportsHandler,
     BotPendingRepository,

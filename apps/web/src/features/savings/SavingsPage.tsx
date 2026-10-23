@@ -15,6 +15,8 @@ import { AllocationCards, AllocationTable } from './components/AllocationOvervie
 import { ContributionDialog } from './components/ContributionDialog';
 import { ContributionHistoryDialog } from './components/ContributionHistoryDialog';
 import { GoalCard } from './components/GoalCard';
+import { useWallets } from '@/features/wallets/hooks';
+import { investmentTotals } from '@/features/wallets/investment';
 import { GoalFormDialog } from './components/GoalFormDialog';
 import { PhaseToggle } from './components/PhaseToggle';
 import { TemplateDialog } from './components/TemplateDialog';
@@ -37,6 +39,8 @@ export function SavingsPage() {
   const hasPlan = plan.data != null;
   const report = useAllocationReport(month, hasPlan);
   const goals = useGoals(showArchived);
+  const { data: allWallets } = useWallets(false);
+  const marketTotals = investmentTotals(allWallets ?? []);
   const updateGoal = useUpdateGoal();
 
   const emergency = goals.data?.find((g) => g.type === 'EMERGENCY' && !g.isArchived);
@@ -57,6 +61,7 @@ export function SavingsPage() {
       key={goal.id}
       goal={goal}
       emphasized={emphasized}
+      market={goal.type === 'INVESTMENT' ? marketTotals : null}
       onDeposit={() => setDialog({ kind: 'contribution', goal, type: 'DEPOSIT' })}
       onWithdraw={() => setDialog({ kind: 'contribution', goal, type: 'WITHDRAW' })}
       onHistory={() => setDialog({ kind: 'history', goal })}

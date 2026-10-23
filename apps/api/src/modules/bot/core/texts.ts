@@ -10,8 +10,9 @@ export const HELP_TEXT = [
   '',
   'Tanya AI: /tanya berapa pengeluaranku bulan ini?',
   'Insight bulanan: /insight',
+  'Investasi: /investasi · perbarui nilai: update ipot 8,7jt',
   '',
-  '/saldo /hariini /bulanini /alokasi /tabungan',
+  '/saldo /hariini /bulanini /alokasi /tabungan /investasi',
   '/undo /batal /unlink /help',
 ].join('\n');
 

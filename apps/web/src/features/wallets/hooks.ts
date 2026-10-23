@@ -40,3 +40,19 @@ export function useDeleteWallet() {
   const invalidate = useInvalidateMoney();
   return useMutation({ mutationFn: (id: string) => walletsApi.remove(id), onSuccess: invalidate });
 }
+
+export function useSetValuation() {
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: ({ id, value }: { id: string; value: string }) => walletsApi.setValuation(id, value),
+    onSuccess: invalidate,
+  });
+}
+
+export function useValuations(id: string | null) {
+  return useQuery({
+    queryKey: ['wallets', 'valuations', id],
+    queryFn: () => walletsApi.valuations(id as string),
+    enabled: id !== null,
+  });
+}
